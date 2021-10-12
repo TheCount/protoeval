@@ -1,0 +1,423 @@
+// File value.proto defines descriptions of evaluation rules for a protobuf
+// message, i. e., how to map a protobuf message to a value.
+
+syntax = "proto3";
+package com.github.thecount.protoeval;
+option go_package = "github.com/TheCount/protoeval";
+
+import "google/protobuf/any.proto";
+import "google/protobuf/empty.proto";
+
+// Value describes how to arrive at a value given an environment and a scope.
+// An environment maps names to other Values and is predetermined by the user.
+// A scope arises from how the fields in a Value are used (see their
+// documentation). The initial scope is the protobuf message to be evaluated.
+message Value {
+  // scope changes the scope relative to the current scope. If omitted, the
+  // current scope remains unchanged.
+  oneof scope {
+    // name selects a new scope based on the given name.
+    //
+    // If the current scope is of message kind with non-repeated cardinality,
+    // the scope is shifted to the field of the given name. It is an error if
+    // no such field exists.
+    //
+    // If the current scope is a map and the map key kind is string,
+    // the scope is shifted to the map value for the given name as key. It is an
+    // error if no such map entry exists.
+    //
+    // In all other cases, use of name is an error.
+    string name = 1;
+
+    // index selects a new scope based on the given index.
+    //
+    // If the current scope is a list, the scope is shifted to the list entry
+    // with the given index. It is an error if the index is out of bounds.
+    //
+    // In all other cases, use of index is an error.
+    uint32 index = 2;
+
+    // bool_key selects a new scope based on the given boolean key.
+    //
+    // If the current scope is a map and the map key kind is bool,
+    // the scope is shifted to the map value for the given bool_key. It is an
+    // error if no such map entry exists.
+    //
+    // In all other cases, use of bool_key is an error.
+    bool bool_key = 3;
+
+    // uint_key selects a new scope based on the given unsigned integer key.
+    //
+    // If the current scope is a map and the map key kind is
+    // uint32, uint64, fixed32, or fixed64, the scope is shifted to
+    // the map value for the given uint_key. It is an error if no such map
+    // entry exists.
+    uint64 uint_key = 4;
+
+    // int_key selects a new scope based on the given signed integer key.
+    //
+    // If the current scope is a map and the map key kind is
+    // int32, sint32, int64, sint64, sfixed32, or sfixed64, the scope is
+    // shifted to the map value for the given int_key. It is an error if no
+    // such map entry exists.
+    int64 int_key = 5;
+  }
+
+  // value describes the actual value. If omitted, the value will be the
+  // scope value.
+  oneof value {
+    // this is a value based on scope. It can be used to chain multiple scope
+    // shifts.
+    Value this = 6;
+
+    // parent is a value based on the parent scope. It can be used to backtrack
+    // from the current scope.
+    Value parent = 7;
+
+    // default is the default value for the scope.
+    google.protobuf.Empty default = 8;
+
+    // nil is an explicit nil value.
+    google.protobuf.Empty nil = 9;
+
+    // bool is an explicit boolean value.
+    bool bool = 10;
+
+    // int32 is an explicit int32 value.
+    int32 int32 = 11;
+
+    // int64 is an explicit int64 value.
+    int64 int64 = 12;
+
+    // uint32 is an explicit uint32 value.
+    uint32 uint32 = 13;
+
+    // uint64 is an explicit uint64 value.
+    uint64 uint64 = 14;
+
+    // float is an explicit float value.
+    float float = 15;
+
+    // double is an explicit double value.
+    double double = 16;
+
+    // string is an explicit string value.
+    string string = 17;
+
+    // bytes is an explicit bytes value.
+    bytes bytes = 18;
+
+    // enum is an explicit enum value.
+    Enum enum = 19;
+
+    // list is an explicit list value based on scope.
+    List list = 20;
+
+    // map is an explicit map value based on scope.
+    Map map = 21;
+
+    // message is an explicit message value based on scope.
+    Message message = 22;
+
+    // basic_message is an explicit message value. It uses the protobuf Any
+    // mechanism. While this doesn't allow complex message generation, the
+    // specification of the message itself in a configuration file will be
+    // less cluttered.
+    google.protobuf.Any basic_message = 23;
+
+    // not yields a boolean value which is the inverse of the specified value
+    // based on scope. It is an error if the specified value is not boolean.
+    Value not = 24;
+
+    // all_of yields a boolean value, which is true if and only if all values
+    // in the list (based on scope) are true.
+    // The list is checked in order, and if a false value is encountered, the
+    // remaining entries in the list are ignored.
+    // It is an error if there are values which are not boolean.
+    // If the list is empty, the result is true.
+    ValueList all_of = 25;
+
+    // any_of yields a boolean value, and is true if and only if there is a
+    // value in the list (based on scope) which is true.
+    // The list is checked in order, and if a true value is encountered, the
+    // remaining entries in the list are ignored.
+    // It is an error if there are values which are not boolean.
+    // If the list is empty, the result is false.
+    ValueList any_of = 26;
+
+    // seq yields the value of last evaluated element in the list (based on
+    // scope). This is normally the final element, but occurrences of break
+    // or continue may cut the evaluation short. If no elements are evaluated,
+    // seq yields nil.
+    ValueList seq = 27;
+
+    // eq yields a boolean value, which is true if and only if all values in
+    // the list are equal. Two NaN values are considered equal for this purpose.
+    // If an element is found to be unequal to the previous elements, the
+    // remaining values are ignored.
+    // It is an error if the non-ignored values do not have the same type.
+    // If the list is empty or has only one element, the result is true.
+    ValueList eq = 28;
+
+    // neq yields a boolean value, which is true if and only if all values
+    // in the list are mutually distinct. Two NaN values are not considered
+    // distinct for this purpose.
+    // If an element is found to be equal to one of the previous elements, the
+    // remaining values are ignored.
+    // It is an error if the non-ignored values do not have the same type.
+    // If the list is empty or has only one element, the result is true.
+    ValueList neq = 29;
+
+    // lt yields a boolean value, which is true if and only if the values in
+    // the list form a strictly increasing sequence.
+    // Once an element violating this condition is found,
+    // the remaining elements are ignored.
+    // It is an error if the non-ignored values do not have the same comparable
+    // type.
+    // Otherwise, if a NaN occurs, the result is false.
+    // Otherwise, if the list is empty or has only one element,
+    // the result is true.
+    ValueList lt = 30;
+
+    // lte yields a boolean value, which is true if and only if the values in
+    // the list form an increasing sequence.
+    // Once an element violating this condition is found,
+    // the remaining elements are ignored.
+    // It is an error if the non-ignored values do not have the same comparable
+    // type.
+    // Otherwise, if a NaN occurs, the result is false.
+    // Otherwise, if the list is empty or has only one element,
+    // the result is true.
+    ValueList lte = 31;
+
+    // gt yields a boolean value, which is true if and only if the values in
+    // the list form a strictly decreasing sequence.
+    // Once an element violating this condition is found,
+    // the remaining elements are ignored.
+    // It is an error if the non-ignored values do not have the same comparable
+    // type.
+    // Otherwise, if a NaN occurs, the result is false.
+    // Otherwise, if the list is empty or has only one element,
+    // the result is true.
+    ValueList gt = 32;
+
+    // gte yields a boolean value, which is true if and only if the values in
+    // the list form a decreasing sequence.
+    // Once an element violating this condition is found,
+    // the remaining elements are ignored.
+    // It is an error if the non-ignroed values do not have the same comparable
+    // type.
+    // Otherwise, if a NaN occurs, the result is false.
+    // Otherwise, if the list is empty or has only one element,
+    // the result is true.
+    ValueList gte = 33;
+
+    // switch yields a value (based on scope) based on conditions.
+    Switch switch = 34;
+
+    // while repeatedly evaluates the then part of the branch for as long
+    // as the case yields true. The final value from then is returned.
+    // If then is never evaluated, nil is returned.
+    Branch while = 35;
+
+    // break breaks out of the given number of while evaluations.
+    // while evaluations where break occurs in the conditional part do not
+    // count.
+    uint32 break = 36;
+
+    // continue continues the given nth enclosing while evaluation.
+    // while evaluations where continue occurs in the conditional
+    // part do not count.
+    uint32 continue = 37;
+
+    // store stores the evaluated value in the environment.
+    // The completely evaluated value can be retrieved again with load.
+    StoredValue store = 38;
+
+    // proc stores the value in the environment.
+    // Only when loaded, the value will be evaluated with the then valid
+    // environment and scope.
+    StoredValue proc = 39;
+
+    // load loads a value from the environment.
+    // If no previous store is present, the value is nil.
+    string load = 40;
+
+    // program is a user defined program to determine the value.
+    string program = 41;
+  }
+
+  // Branch describes a conditional branch.
+  message Branch {
+    // case must be a boolean value. If it is true, then will be evaluated.
+    Value case = 1;
+
+    // then is the value of this Branch if case is true.
+    Value then = 2;
+  }
+
+  // Enum describes an enum value.
+  message Enum {
+    // type is the full name of the enum type. Required.
+    string type = 1;
+
+    // by selects the enum value by its numeric value or by its name. Required.
+    oneof by {
+      // number is the numeric value of the enum constant.
+      int32 number = 2;
+
+      // name is the name of the enum constant.
+      string name = 3;
+    }
+  }
+
+  // Kind enumerates protobuf type kinds as in
+  // google.protobuf.FieldDescriptorProto.Type. We cannot use the latter enum
+  // because it is a proto2 type and we use proto3 syntax.
+  // The enum numbers are identical, though.
+  enum Kind {
+    // INVALID has no counterpart in google.protobuf.FieldDescriptorProto.Type,
+    // but proto3 enums must start with zero.
+    INVALID = 0;
+
+    // DOUBLE is the kind of the double type.
+    DOUBLE = 1;
+
+    // FLOAT is the kind of the float type.
+    FLOAT = 2;
+
+    // INT64 is the kind of the int64 type.
+    INT64 = 3;
+
+    // UINT64 is the kind of the uint64 type.
+    UINT64 = 4;
+
+    // INT32 is the kind of the int32 type.
+    INT32 = 5;
+
+    // FIXED64 is the kind of the fixed64 type.
+    FIXED64 = 6;
+
+    // FIXED32 is the kind of the fixed32 type.
+    FIXED32 = 7;
+
+    // BOOL is the kind of the bool type.
+    BOOL = 8;
+
+    // STRING is the kind of the string type.
+    STRING = 9;
+
+    // GROUP is deprecated and therefore reserved.
+    reserved 10;
+    reserved "GROUP";
+
+    // MESSAGE is the kind for all message types.
+    MESSAGE = 11;
+
+    // BYTES is the kind for the bytes type.
+    BYTES = 12;
+
+    // UINT32 is the kind for the uint32 type.
+    UINT32 = 13;
+
+    // ENUM is the kind for all enum types.
+    ENUM = 14;
+
+    // SFIXED32 is the kind for the sfixed32 type.
+    SFIXED32 = 15;
+
+    // SFIXED64 is the kind for the sfixed64 type.
+    SFIXED64 = 16;
+
+    // SINT32 is the kind for the sint32 type.
+    SINT32 = 17;
+
+    // SINT64 is the kind for the sint64 type.
+    SINT64 = 18;
+  }
+
+  // List describes a list value.
+  message List {
+    // kind is the kind of the value type of the list.
+    // Can be omitted for non-empty lists, otherwise required.
+    Kind kind = 1;
+
+    // type is the full name of the value type of the list.
+    // Must be omitted if the type is already fully determined by kind.
+    // Can be omitted for non-empty lists.
+    string type = 2;
+
+    // values are the values in this List. All values must have the same type,
+    // which must match kind/type if not omitted.
+    repeated Value values = 3;
+  }
+
+  // Map describes a map value.
+  message Map {
+    // Entry describes a map entry.
+    message Entry {
+      // key is the the of this entry. Required.
+      Value key = 1;
+
+      // value is the value of this entry. Required.
+      Value value = 2;
+    }
+
+    // key_kind is the kind of the key type of the map.
+    // Must be a valid kind for a map key type.
+    // Can be omitted for non-empty maps, otherwise required.
+    Kind key_kind = 1;
+
+    // value_kind is the kind of the value type of the map.
+    // Can be omitted for non-empty maps, otherwise required.
+    Kind value_kind = 2;
+
+    // value_type is the full name of the value type of the map.
+    // Must be omitted if the type is already fully determined by value_kind.
+    // Can be omitted for non-empty maps.
+    string value_type = 3;
+
+    // entries is the list of map entries. The keys must be mutually distinct.
+    // Keys and values must match the types determined by
+    // key_kind/value_kind/value_type if not omitted.
+    repeated Entry entries = 4;
+  }
+
+  // Message describes a message value.
+  message Message {
+    // type is the full name of the message type. Required.
+    string type = 1;
+
+    // fields describes the message fields. The types of the values must match
+    // the message field types.
+    map<string, Value> fields = 2;
+  }
+
+  // StoredValue describes a value stored in the environment.
+  message StoredValue {
+    // key is the storage key.
+    string key = 1;
+
+    // value is the value stored under key.
+    Value value = 2;
+  }
+
+  // Switch describes a value selection by condition.
+  message Switch {
+    // cases is the list of cases. The list will be evaluated in order. The
+    // first case which matches determines the then value of this Switch.
+    // If no case matches, the default value is returned.
+    repeated Branch cases = 1;
+
+    // default is the value returned if none of the cases matches.
+    // If default is omitted, the value will be nil in this case.
+    Value default = 2;
+  }
+
+  // ValueList is a list of values, not necessarily of the same type (though
+  // users of ValueList often prescribe certain type constraints).
+  message ValueList {
+    // values is the list of values.
+    repeated Value values = 1;
+  }
+}
