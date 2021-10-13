@@ -250,29 +250,40 @@ func protoCompare(a, b interface{}) int {
 }
 
 // protoUnpackValue unpacks a protobuf reflection value into unreflected
-// Go values.
-func protoUnpackValue(pValue protoreflect.Value) interface{} {
+// Go values. The given descriptor must be the field descriptor for the value,
+// except if the value is a message, in which case desc may be nil.
+func protoUnpackValue(
+	pDesc protoreflect.FieldDescriptor, pValue protoreflect.Value,
+) interface{} {
 	switch x := pValue.Interface().(type) {
 	case protoreflect.Message:
 		return x.Interface()
 	case protoreflect.List:
-		typ := reflect.TypeOf(protoUnpackValue(x.NewElement()))
+		typ := reflect.TypeOf(protoUnpackValue(pDesc, x.NewElement()))
 		result := reflect.MakeSlice(reflect.SliceOf(typ), 0, x.Len())
 		for i := 0; i < x.Len(); i++ {
 			result = reflect.Append(result,
-				reflect.ValueOf(protoUnpackValue(x.Get(i))))
+				reflect.ValueOf(protoUnpackValue(pDesc, x.Get(i))))
 		}
 		return result.Interface()
 	case protoreflect.Map:
-		panic("map not supported yet")
+		keyDesc := pDesc.MapKey()
+		valueDesc := pDesc.MapValue()
+		keyType, _ := getProtoMapKeyType(Value_Kind(keyDesc.Kind()))
+		valueType := reflect.TypeOf(protoUnpackValue(valueDesc, x.NewValue()))
+		result := reflect.MakeMapWithSize(
+			reflect.MapOf(keyType, valueType), x.Len())
+		x.Range(func(key protoreflect.MapKey, value protoreflect.Value) bool {
+			result.SetMapIndex(
+				reflect.ValueOf(protoUnpackValue(keyDesc, key.Value())),
+				reflect.ValueOf(protoUnpackValue(valueDesc, value)),
+			)
+			return true
+		})
+		return result.Interface()
 	case protoreflect.EnumNumber:
-		panic("enum not supported yet")
+		return pDesc.Enum().Values().ByNumber(x)
 	default:
 		return pValue.Interface()
 	}
-}
-
-// getMapKeyType returns the key type for the specified map.
-func getMapKeyType(m protoreflect.Map) reflect.Type {
-	panic("not supported")
 }
