@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"time"
 
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -184,7 +185,14 @@ func (s *scope) DefaultValue() interface{} {
 	case protoreflect.EnumNumber:
 		return s.desc.DefaultEnumValue()
 	case protoreflect.Message:
-		return x.Type().New().Interface()
+		switch x.Descriptor().FullName() {
+		case durationName:
+			return time.Duration(0)
+		case timestampName:
+			return time.Time{}
+		default:
+			return x.Type().New().Interface()
+		}
 	case protoreflect.List:
 		typ := reflect.TypeOf(protoUnpackValue(s.desc, x.NewElement()))
 		return reflect.MakeSlice(reflect.SliceOf(typ), 0, 0).Interface()

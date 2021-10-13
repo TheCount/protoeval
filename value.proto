@@ -6,7 +6,9 @@ package com.github.thecount.protoeval;
 option go_package = "github.com/TheCount/protoeval";
 
 import "google/protobuf/any.proto";
+import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
 
 // Value describes how to arrive at a value given an environment and a scope.
 // An environment maps names to other Values and is predetermined by the user.
@@ -125,9 +127,15 @@ message Value {
     // less cluttered.
     google.protobuf.Any basic_message = 23;
 
+    // duration is an explicit duration.
+    google.protobuf.Duration duration = 24;
+
+    // timestamp is an explicit timestamp.
+    google.protobuf.Timestamp timestamp = 25;
+
     // not yields a boolean value which is the inverse of the specified value
     // based on scope. It is an error if the specified value is not boolean.
-    Value not = 24;
+    Value not = 26;
 
     // all_of yields a boolean value, which is true if and only if all values
     // in the list (based on scope) are true.
@@ -135,7 +143,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is true.
-    ValueList all_of = 25;
+    ValueList all_of = 27;
 
     // any_of yields a boolean value, and is true if and only if there is a
     // value in the list (based on scope) which is true.
@@ -143,7 +151,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is false.
-    ValueList any_of = 26;
+    ValueList any_of = 28;
 
     // eq yields a boolean value, which is true if and only if all values in
     // the list are equal. Two NaN values are considered equal for this purpose.
@@ -151,7 +159,7 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList eq = 27;
+    ValueList eq = 29;
 
     // neq yields a boolean value, which is true if and only if all values
     // in the list are mutually distinct. Two NaN values are not considered
@@ -160,7 +168,7 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList neq = 28;
+    ValueList neq = 30;
 
     // lt yields a boolean value, which is true if and only if the values in
     // the list form a strictly increasing sequence.
@@ -171,7 +179,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList lt = 29;
+    ValueList lt = 31;
 
     // lte yields a boolean value, which is true if and only if the values in
     // the list form an increasing sequence.
@@ -182,7 +190,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList lte = 30;
+    ValueList lte = 32;
 
     // gt yields a boolean value, which is true if and only if the values in
     // the list form a strictly decreasing sequence.
@@ -193,7 +201,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList gt = 31;
+    ValueList gt = 33;
 
     // gte yields a boolean value, which is true if and only if the values in
     // the list form a decreasing sequence.
@@ -204,47 +212,47 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList gte = 32;
+    ValueList gte = 34;
 
     // seq yields the value of last evaluated element in the list (based on
     // scope). This is normally the final element, but occurrences of break
     // or continue may cut the evaluation short. If no elements are evaluated,
     // seq yields nil.
-    ValueList seq = 33;
+    ValueList seq = 35;
 
     // switch yields a value (based on scope) based on conditions.
-    Switch switch = 34;
+    Switch switch = 36;
 
     // while repeatedly evaluates the then part of the branch for as long
     // as the case yields true. The final value from then is returned.
     // If then is never evaluated, nil is returned.
-    Branch while = 35;
+    Branch while = 37;
 
     // break breaks out of the given number of while evaluations.
     // while evaluations where break occurs in the conditional part do not
     // count.
-    uint32 break = 36;
+    uint32 break = 38;
 
     // continue continues the given nth enclosing while evaluation.
     // while evaluations where continue occurs in the conditional
     // part do not count.
-    uint32 continue = 37;
+    uint32 continue = 39;
 
     // store stores the evaluated value in the environment.
     // The completely evaluated value can be retrieved again with load.
-    StoredValue store = 38;
+    StoredValue store = 40;
 
     // proc stores the value in the environment.
     // Only when loaded, the value will be evaluated with the then valid
     // environment and scope.
-    StoredValue proc = 39;
+    StoredValue proc = 41;
 
     // load loads a value from the environment.
     // If no previous store is present, the value is nil.
-    string load = 40;
+    string load = 42;
 
     // program is a user defined program to determine the value.
-    string program = 41;
+    string program = 43;
   }
 
   // Branch describes a conditional branch.

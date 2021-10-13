@@ -342,6 +342,16 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 			return nil, fmt.Errorf("unmarshal basic message: %w", err)
 		}
 		return result, nil
+	case *Value_Duration:
+		if err := x.Duration.CheckValid(); err != nil {
+			return nil, fmt.Errorf("duration: %w", err)
+		}
+		return x.Duration.AsDuration(), nil
+	case *Value_Timestamp:
+		if err := x.Timestamp.CheckValid(); err != nil {
+			return nil, fmt.Errorf("timestamp: %w", err)
+		}
+		return x.Timestamp.AsTime(), nil
 	case *Value_Not:
 		rv, err := eval(env, cyclesLeft, x.Not)
 		if err != nil {

@@ -5,10 +5,24 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/known/durationpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+// Well-known type (WKT) names.
+var (
+	// durationName is the protobuf full name for the duration WKT.
+	durationName = (&durationpb.Duration{}).ProtoReflect().
+			Descriptor().FullName()
+
+	// timestampName is the protobuf full name for the timestamp WKT.
+	timestampName = (&timestamppb.Timestamp{}).ProtoReflect().
+			Descriptor().FullName()
 )
 
 // getProtoType returns the Go type for the protobuf type specified by the
@@ -31,12 +45,19 @@ func getProtoType(kind Value_Kind, typeName string) (reflect.Type, error) {
 		}
 		switch kind {
 		case Value_MESSAGE:
-			msgType, err := protoregistry.GlobalTypes.FindMessageByName(protoName)
-			if err != nil {
-				return nil, fmt.Errorf("find protobuf message type '%s': %w",
-					protoName, err)
+			switch protoreflect.FullName(typeName) {
+			case durationName:
+				return reflect.TypeOf(time.Duration(0)), nil
+			case timestampName:
+				return reflect.TypeOf(time.Time{}), nil
+			default:
+				msgType, err := protoregistry.GlobalTypes.FindMessageByName(protoName)
+				if err != nil {
+					return nil, fmt.Errorf("find protobuf message type '%s': %w",
+						protoName, err)
+				}
+				return reflect.TypeOf(msgType.New().Interface()), nil
 			}
-			return reflect.TypeOf(msgType.New().Interface()), nil
 		case Value_ENUM:
 			enumType, err := protoregistry.GlobalTypes.FindEnumByName(protoName)
 			if err != nil {
@@ -110,7 +131,7 @@ func isValidMapKeyType(typ reflect.Type) bool {
 // just messages.
 func protoEqual(a, b interface{}) bool {
 	switch x := a.(type) {
-	case nil, int64, uint64, int32, bool, string:
+	case nil, int64, uint64, int32, bool, string, time.Duration:
 		return a == b
 	case float32: // special NaN treatment
 		y, ok := b.(float32)
@@ -127,6 +148,9 @@ func protoEqual(a, b interface{}) bool {
 	case proto.Message:
 		y, ok := b.(proto.Message)
 		return ok && proto.Equal(x, y)
+	case time.Time:
+		y, ok := b.(time.Time)
+		return ok && x.Equal(y)
 	case []byte:
 		y, ok := b.([]byte)
 		return ok && bytes.Equal(x, y)
@@ -180,13 +204,15 @@ func protoEqual(a, b interface{}) bool {
 
 // isComparable reports whether the specified type is comparable.
 // Floating point types count as comparable, even though the NaN value is not
-// comparable. Enum types are not comparable. String and []byte are comparable.
+// comparable. Enum types are not comparable. String, []byte, time.Duration, and
+// time.Time are comparable.
 func isComparable(typ reflect.Type) bool {
 	switch typ {
 	case reflect.TypeOf(float64(0)), reflect.TypeOf(float32(0)),
 		reflect.TypeOf(int64(0)), reflect.TypeOf(uint64(0)),
 		reflect.TypeOf(int32(0)), reflect.TypeOf(uint32(0)),
-		reflect.TypeOf(""), reflect.TypeOf([]byte{}):
+		reflect.TypeOf(""), reflect.TypeOf([]byte{}),
+		reflect.TypeOf(time.Duration(0)), reflect.TypeOf(time.Time{}):
 		return true
 	default:
 		return false
@@ -244,6 +270,12 @@ func protoCompare(a, b interface{}) int {
 	case []byte:
 		y := b.([]byte)
 		return bytes.Compare(x, y)
+	case time.Duration:
+		y := b.(time.Duration)
+		return s(x < y, x == y)
+	case time.Time:
+		y := b.(time.Time)
+		return s(x.Before(y), x.Equal(y))
 	default:
 		panic(fmt.Sprintf("BUG: unsupported comparison types %T/%T", a, b))
 	}
@@ -257,7 +289,14 @@ func protoUnpackValue(
 ) interface{} {
 	switch x := pValue.Interface().(type) {
 	case protoreflect.Message:
-		return x.Interface()
+		switch x.Descriptor().FullName() {
+		case durationName:
+			return x.Interface().(*durationpb.Duration).AsDuration()
+		case timestampName:
+			return x.Interface().(*timestamppb.Timestamp).AsTime()
+		default:
+			return x.Interface()
+		}
 	case protoreflect.List:
 		typ := reflect.TypeOf(protoUnpackValue(pDesc, x.NewElement()))
 		result := reflect.MakeSlice(reflect.SliceOf(typ), 0, x.Len())
