@@ -383,20 +383,6 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 				i, rv)
 		}
 		return false, nil
-	case *Value_Seq:
-		var result interface{}
-		for _, value := range x.Seq.Values {
-			rv, err := eval(env, cyclesLeft, value)
-			switch err.(type) {
-			case nil:
-				result = rv
-			case errBreak, errContinue:
-				return result, fmt.Errorf("seq interrupted: %w", err)
-			default:
-				return rv, err
-			}
-		}
-		return result, nil
 	case *Value_Eq:
 		if len(x.Eq.Values) == 0 {
 			return true, nil
@@ -567,6 +553,20 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 			lastValue = value
 		}
 		return true, nil
+	case *Value_Seq:
+		var result interface{}
+		for _, value := range x.Seq.Values {
+			rv, err := eval(env, cyclesLeft, value)
+			switch err.(type) {
+			case nil:
+				result = rv
+			case errBreak, errContinue:
+				return result, fmt.Errorf("seq interrupted: %w", err)
+			default:
+				return rv, err
+			}
+		}
+		return result, nil
 	case *Value_Switch_:
 		for i, cse := range x.Switch.Cases {
 			if cse.Case == nil {

@@ -145,19 +145,13 @@ message Value {
     // If the list is empty, the result is false.
     ValueList any_of = 26;
 
-    // seq yields the value of last evaluated element in the list (based on
-    // scope). This is normally the final element, but occurrences of break
-    // or continue may cut the evaluation short. If no elements are evaluated,
-    // seq yields nil.
-    ValueList seq = 27;
-
     // eq yields a boolean value, which is true if and only if all values in
     // the list are equal. Two NaN values are considered equal for this purpose.
     // If an element is found to be unequal to the previous elements, the
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList eq = 28;
+    ValueList eq = 27;
 
     // neq yields a boolean value, which is true if and only if all values
     // in the list are mutually distinct. Two NaN values are not considered
@@ -166,7 +160,7 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList neq = 29;
+    ValueList neq = 28;
 
     // lt yields a boolean value, which is true if and only if the values in
     // the list form a strictly increasing sequence.
@@ -177,7 +171,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList lt = 30;
+    ValueList lt = 29;
 
     // lte yields a boolean value, which is true if and only if the values in
     // the list form an increasing sequence.
@@ -188,7 +182,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList lte = 31;
+    ValueList lte = 30;
 
     // gt yields a boolean value, which is true if and only if the values in
     // the list form a strictly decreasing sequence.
@@ -199,7 +193,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList gt = 32;
+    ValueList gt = 31;
 
     // gte yields a boolean value, which is true if and only if the values in
     // the list form a decreasing sequence.
@@ -210,7 +204,13 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList gte = 33;
+    ValueList gte = 32;
+
+    // seq yields the value of last evaluated element in the list (based on
+    // scope). This is normally the final element, but occurrences of break
+    // or continue may cut the evaluation short. If no elements are evaluated,
+    // seq yields nil.
+    ValueList seq = 33;
 
     // switch yields a value (based on scope) based on conditions.
     Switch switch = 34;
