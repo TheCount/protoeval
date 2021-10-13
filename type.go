@@ -43,8 +43,11 @@ func getProtoType(kind Value_Kind, typeName string) (reflect.Type, error) {
 				return nil, fmt.Errorf("find protobuf enum type '%s': %w",
 					protoName, err)
 			}
-			// FIXME: the following might panic for proto2 enums.
-			return reflect.TypeOf(enumType.Descriptor().Values().Get(0)), nil
+			values := enumType.Descriptor().Values()
+			if values.Len() == 0 { // can only happen with proto2 enums
+				return nil, fmt.Errorf("enum '%s' is empty", typeName)
+			}
+			return reflect.TypeOf(values.Get(0)), nil
 		default:
 			return nil, fmt.Errorf("non-empty type '%s' with protobuf kind '%s'",
 				typeName, kind)
