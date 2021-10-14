@@ -253,6 +253,27 @@ message Value {
 
     // program is a user defined program to determine the value.
     string program = 43;
+
+    // scope_is yields a boolean value and is true if and only if the
+    // given string matches a *full* field or type name (e. g.,
+    // google.protobuf.Timestamp but not Timestamp alone),
+    // as defined below (more than one can apply):
+    //
+    // If the scope value is a message, the message type name.
+    //
+    // If the scope value is a map, the type name of the synthetic message
+    // type generated to represent the map. See
+    // https://developers.google.com/protocol-buffers/docs/proto3#backwards_compatibility
+    // for details.
+    //
+    // If the scope value is an enum number, both the enum name and
+    // the enum value name.
+    //
+    // If the scope is not the root scope, the field name.
+    // Lists and list elements share the same field name (of a repeated field).
+    // Remember that map values use a synthetic field name, see
+    // https://developers.google.com/protocol-buffers/docs/proto3#backwards_compatibility.
+    string scope_is = 44;
   }
 
   // Branch describes a conditional branch.

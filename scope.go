@@ -32,6 +32,38 @@ func (s *scope) Init(msg protoreflect.Message) {
 	s.parent = nil
 }
 
+// Matches reports whether the given name matches this scope.
+// This is the case if and only if at least one of the following applies:
+//
+// The current scope is a field with the given full protobuf name.
+//
+// The current scope is a message with the given full protobuf type name.
+//
+// The current scope is an enum value with the given full protobuf name,
+// or the given name is the type name of the enum the enum value is from.
+func (s *scope) Matches(name protoreflect.FullName) bool {
+	if s.desc != nil && s.desc.FullName() == name {
+		return true
+	}
+	switch x := s.value.Interface().(type) {
+	case protoreflect.Message:
+		return x.Descriptor().FullName() == name
+	case protoreflect.Map:
+		return s.desc.Message().FullName() == name
+	case protoreflect.EnumNumber:
+		enumDesc := s.desc.Enum()
+		if enumDesc.FullName() == name {
+			return true
+		}
+		if enumDesc.Values().ByNumber(x).FullName() == name {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}
+
 // ShiftByName returns a child scope of this scope by indexing this scope
 // by name.
 func (s *scope) ShiftByName(name string) (scope, error) {

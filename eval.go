@@ -696,6 +696,8 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		return value, nil
 	case *Value_Program:
 		return nil, errors.New("program not supported yet")
+	case *Value_ScopeIs:
+		return env.scope.Matches(protoreflect.FullName(x.ScopeIs)), nil
 	default:
 		panic(fmt.Sprintf("BUG: unsupported value type %T", value.Value))
 	}
