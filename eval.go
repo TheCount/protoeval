@@ -5,6 +5,7 @@ import (
 	"fmt"
 	reflect "reflect"
 
+	"github.com/google/cel-go/cel"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -695,7 +696,32 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		}
 		return value, nil
 	case *Value_Program:
-		return nil, errors.New("program not supported yet")
+		initCelTypes()
+		celEnv, err := cel.NewEnv(
+			cel.Types(celTypes...),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("build CEL environment: %w", err)
+		}
+		ast, iss := celEnv.Compile(x.Program)
+		if iss.Err() != nil {
+			return nil, fmt.Errorf("compile CEL program source: %w", iss.Err())
+		}
+		prg, err := celEnv.Program(ast)
+		if err != nil {
+			return nil, fmt.Errorf("construct CEL program: %w", err)
+		}
+		out, _, err := prg.Eval(map[string]interface{}{
+			"scope": (*celScope)(&env.scope),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("evaluate CEL program: %w", err)
+		}
+		result, err := cel2go(out)
+		if err != nil {
+			return nil, fmt.Errorf("CEL program output: %w", err)
+		}
+		return result, nil
 	case *Value_ScopeIs:
 		return env.scope.Matches(protoreflect.FullName(x.ScopeIs)), nil
 	default:
