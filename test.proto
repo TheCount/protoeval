@@ -1,0 +1,19 @@
+// File test.proto defines protobuf messages used for testing the protoeval
+// package. The messages defined here will not be included in production
+// builds.
+
+syntax = "proto3";
+package com.github.thecount.protoeval;
+option go_package = "github.com/TheCount/protoeval";
+
+// ScopeTest contains fields for scope selection testing.
+message ScopeTest {
+  int32 a_scalar = 1;
+  repeated int32 a_list = 2;
+  map<string, int32> a_string_map = 3;
+  map<bool, int32> a_bool_map = 4;
+  map<uint32, int32> a_uint32_map = 5;
+  map<uint64, int32> a_uint64_map = 6;
+  map<int32, int32> an_int32_map = 7;
+  map<int64, int32> an_int64_map = 8;
+}
