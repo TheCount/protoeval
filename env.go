@@ -7,7 +7,7 @@ type Env struct {
 	// values is the general value storage for this environment.
 	values map[string]interface{}
 
-	// scope is the current scope
+	// scope is the current scope.
 	scope scope
 
 	// cyclesLeft is the number of cycles (an evaluation cost measure) left
