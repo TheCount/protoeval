@@ -3,17 +3,18 @@ package protoeval
 import (
 	"errors"
 	"fmt"
-	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
-	"github.com/google/cel-go/common/types"
-	"github.com/google/cel-go/common/types/pb"
 	"github.com/google/cel-go/common/types/ref"
-	"github.com/google/cel-go/common/types/traits"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // celTypes is the list of types we make available to all CEL programs.
@@ -30,7 +31,6 @@ var initCelTypesOnce sync.Once
 // initCelTypes ensures the celTypes variable is initialised.
 func initCelTypes() {
 	initCelTypesOnce.Do(func() {
-		celTypes = []interface{}{(*celScope)(nil)}
 		protoregistry.GlobalTypes.
 			RangeMessages(func(mt protoreflect.MessageType) bool {
 				if msg := mt.Zero(); msg != nil {
@@ -41,114 +41,110 @@ func initCelTypes() {
 	})
 }
 
-// celScope is the cel version of scope. It has all the methods needed to
-// implement various cel interfaces.
-type celScope scope
-
-// HasTrait implements cel's ref.Type.HasTrait API.
-func (*celScope) HasTrait(trait int) bool {
-	return trait&traits.ReceiverType != 0
-}
-
-// TypeName implements cel's ref.Type.TypeName API.
-func (*celScope) TypeName() string {
-	return "com.github.thecount.protoeval.Scope"
-}
-
-// ConvertToNative implements cel's ref.Val.ConvertToNative API.
-func (s *celScope) ConvertToNative(typeDesc reflect.Type) (interface{}, error) {
-	thisType := reflect.TypeOf(celScope{})
-	switch typeDesc {
-	case thisType:
-		return *s, nil
-	case reflect.PtrTo(thisType):
-		ns := *s
-		return &ns, nil
-	default:
-		return nil, fmt.Errorf("cannot convert scope to %s", typeDesc)
+// scope2cel converts a scope to a CEL scope.
+func scope2cel(s *scope) (*Scope, error) {
+	if s == nil {
+		return nil, nil
 	}
-}
-
-// ConvertToType implements cel's ref.Val.ConvertToType API.
-func (s *celScope) ConvertToType(typeValue ref.Type) ref.Val {
-	// FIXME: evaluate if type conversion from a scope can be useful in practice.
-	return types.NewErr("scope conversion not supported")
-}
-
-// Equal implements cel's ref.Val.Equal API.
-// Two scopes are equal if their descriptors and values match.
-func (s *celScope) Equal(other ref.Val) ref.Val {
-	otherScope, ok := other.Value().(*celScope)
-	if !ok {
-		return types.False
+	parent, err := scope2cel(s.parent)
+	if err != nil {
+		return nil, fmt.Errorf("parent scope: %w", err)
 	}
-	msg1, ok1 := s.value.Interface().(protoreflect.Message)
-	msg2, ok2 := otherScope.value.Interface().(protoreflect.Message)
-	if (ok1 && !ok2) || (!ok1 && ok2) {
-		return types.False
+	result := &Scope{
+		Parent: parent,
 	}
-	if ok1 {
-		if !ok2 {
-			return types.False
-		}
-		if msg1.Descriptor().FullName() != msg2.Descriptor().FullName() {
-			return types.False
-		}
-		return types.Bool(proto.Equal(msg1.Interface(), msg2.Interface()))
+	if s.desc != nil {
+		result.FieldDescriptor = protodesc.ToFieldDescriptorProto(s.desc)
 	}
-	if ok2 {
-		return types.False
-	}
-	if s.desc.FullName() != otherScope.desc.FullName() {
-		return types.False
-	}
-	return types.Bool(protoEqual(s.value.Interface(),
-		otherScope.value.Interface()))
-}
-
-// Type implements cel's ref.Val.Type API.
-func (*celScope) Type() ref.Type {
-	return (*celScope)(nil)
-}
-
-// Value implements cel's ref.Val.Value API.
-func (s *celScope) Value() interface{} {
-	return (*scope)(s)
-}
-
-// Receive implements cel's traits.Receiver.Receive API.
-func (s *celScope) Receive(name string, op string, args []ref.Val) ref.Val {
-	if op != "" {
-		return types.NewErr("operator '%s' not supported", op)
-	}
-	switch name {
-	case "value":
-		return proto2cel(s.desc, s.value)
-	case "parent":
-		if s.parent == nil {
-			return types.NewErr("request for parent in root scope")
-		}
-		return (*celScope)(s.parent)
-	default:
-		return types.NewErr("invalid method: %s", name)
-	}
-}
-
-// proto2cel returns the CEL value for the specified protobuf value.
-// fd must be non/nil unless the value represents a protobuf message.
-func proto2cel(fd protoreflect.FieldDescriptor, pv protoreflect.Value) ref.Val {
-	switch x := pv.Interface().(type) {
+	switch x := s.value.Interface().(type) {
 	case protoreflect.List:
-		return types.NewProtoList(types.DefaultTypeAdapter, x)
+		for i := 0; i < x.Len(); i++ {
+			elt, err := value2any(x.Get(i).Interface())
+			if err != nil {
+				return nil, fmt.Errorf("convert list element %d to Any: %w", i, err)
+			}
+			result.List = append(result.List, elt)
+		}
 	case protoreflect.Map:
-		return types.NewProtoMap(types.DefaultTypeAdapter, &pb.Map{
-			Map:       x,
-			KeyType:   pb.NewFieldDescription(fd.MapKey()),
-			ValueType: pb.NewFieldDescription(fd.MapValue()),
+		result.Map = make(map[string]*anypb.Any)
+		x.Range(func(key protoreflect.MapKey, value protoreflect.Value) bool {
+			var stringKey string
+			switch y := key.Interface().(type) {
+			case string:
+				stringKey = y
+			case int32:
+				stringKey = strconv.FormatInt(int64(y), 10)
+			case int64:
+				stringKey = strconv.FormatInt(y, 10)
+			case uint32:
+				stringKey = strconv.FormatUint(uint64(y), 10)
+			case uint64:
+				stringKey = strconv.FormatUint(y, 10)
+			case bool:
+				if y {
+					stringKey = "True"
+				} else {
+					stringKey = "False"
+				}
+			default:
+				panic(fmt.Sprintf("BUG: missing MapKey case for %T", key.Interface()))
+			}
+			var anyValue *anypb.Any
+			anyValue, err = value2any(value.Interface())
+			if err != nil {
+				err = fmt.Errorf("convert map value for key '%s': %w", stringKey, err)
+				return false
+			}
+			result.Map[stringKey] = anyValue
+			return true
 		})
+		if err != nil {
+			return nil, err
+		}
 	default:
-		return types.DefaultTypeAdapter.NativeToValue(pv.Interface())
+		anyValue, err := value2any(s.value.Interface())
+		if err != nil {
+			return nil, err
+		}
+		result.Value = anyValue
 	}
+	return result, nil
+}
+
+// value2any converts the given value to an anypb.
+func value2any(value interface{}) (result *anypb.Any, err error) {
+	switch x := value.(type) {
+	case protoreflect.Message:
+		result, err = anypb.New(x.Interface())
+	case nil:
+		result, err = anypb.New(structpb.NewNullValue())
+	case bool:
+		result, err = anypb.New(&wrapperspb.BoolValue{Value: x})
+	case int32:
+		result, err = anypb.New(&wrapperspb.Int32Value{Value: x})
+	case int64:
+		result, err = anypb.New(&wrapperspb.Int64Value{Value: x})
+	case uint32:
+		result, err = anypb.New(&wrapperspb.UInt32Value{Value: x})
+	case uint64:
+		result, err = anypb.New(&wrapperspb.UInt64Value{Value: x})
+	case float32:
+		result, err = anypb.New(&wrapperspb.FloatValue{Value: x})
+	case float64:
+		result, err = anypb.New(&wrapperspb.DoubleValue{Value: x})
+	case protoreflect.EnumNumber:
+		result, err = anypb.New(&wrapperspb.Int32Value{Value: int32(x)})
+	case string:
+		result, err = anypb.New(&wrapperspb.StringValue{Value: x})
+	case []byte:
+		result, err = anypb.New(&wrapperspb.BytesValue{Value: x})
+	default:
+		return nil, fmt.Errorf("cannot convert %T to anypb.Any", value)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("convert %T to anypb.Any: %w", value, err)
+	}
+	return result, nil
 }
 
 // cel2go converts the given cel value to a go value.

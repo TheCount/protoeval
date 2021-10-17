@@ -6,6 +6,7 @@ import (
 	reflect "reflect"
 
 	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/checker/decls"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -699,6 +700,11 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		initCelTypes()
 		celEnv, err := cel.NewEnv(
 			cel.Types(celTypes...),
+			cel.Declarations(
+				decls.NewVar("scope",
+					decls.NewObjectType("com.github.thecount.protoeval.Scope"),
+				),
+			),
 		)
 		if err != nil {
 			return nil, fmt.Errorf("build CEL environment: %w", err)
@@ -711,8 +717,12 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("construct CEL program: %w", err)
 		}
+		celScope, err := scope2cel(&env.scope)
+		if err != nil {
+			return nil, fmt.Errorf("construct CEL scope: %w", err)
+		}
 		out, _, err := prg.Eval(map[string]interface{}{
-			"scope": (*celScope)(&env.scope),
+			"scope": celScope,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("evaluate CEL program: %w", err)

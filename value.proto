@@ -6,6 +6,7 @@ package com.github.thecount.protoeval;
 option go_package = "github.com/TheCount/protoeval";
 
 import "google/protobuf/any.proto";
+import "google/protobuf/descriptor.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
@@ -449,4 +450,48 @@ message Value {
     // values is the list of values.
     repeated Value values = 1;
   }
+}
+
+// Scope describes a scope for CEL programs. It can be used for more complex
+// message access. The Scope message is not directly used in the Value message.
+message Scope {
+  // parent is the parent scope of this scope. If omitted, this scope is the
+  // root scope.
+  Scope parent = 1;
+
+  // field_descriptor describes the field leading up to the value of this Scope.
+  // If omitted, this scope is the root scope.
+  google.protobuf.FieldDescriptorProto field_descriptor = 2;
+
+  // value is the scope value for messages and scalars. For scalars, the
+  // google.protobuf wrappers types will be used. Enum values will be
+  // converted to google.protobuf.Int32Value.
+  // CEL automatically converts the Any and wrapper types to their proper
+  // message or scalar types.
+  // If the scope value is not a message or a scalar, value will be omitted.
+  google.protobuf.Any value = 3;
+
+  // list is the scope value for lists. If the list element type is a scalar,
+  // a google.protobuf wrappers type will be used.
+  // CEL automatically converts the Any and wrapper types to their proper
+  // message or scalar types.
+  // If the scope value is not a list, list will be omitted.
+  repeated google.protobuf.Any list = 4;
+
+  // map is the scope value for maps. If the map key type is not a string, the
+  // keys will be converted to a string as follows:
+  //
+  //     /-----------------------------------------\
+  //     | Key     | String representation of Key  |
+  //     |=========|===============================|
+  //     | false   | "False"                       |
+  //     | true    | "True"                        |
+  //     | integer | The integer as decimal string |
+  //     \-----------------------------------------/
+  //
+  // If the map value type is a scalar, a google.protobuf wrappers type will be
+  // used. CEL automatically converts the Any and wrapper types to their proper
+  // message or scalar types.
+  // If the scope value is not a map, map will be omitted.
+  map<string, google.protobuf.Any> map = 5;
 }
