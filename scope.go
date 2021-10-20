@@ -64,6 +64,40 @@ func (s *scope) Matches(name protoreflect.FullName) bool {
 	}
 }
 
+// Has reports whether the value of this scope is either:
+//
+// A message and has a set field with name str. Fields without presence
+// are always considered set.
+//
+// A map with key type string, with a value under the key str.
+func (s *scope) Has(str string) bool {
+	switch x := s.value.Interface().(type) {
+	case protoreflect.Message:
+		name := protoreflect.Name(str)
+		md := x.Descriptor()
+		fd := md.Fields().ByName(name)
+		if fd == nil {
+			ood := md.Oneofs().ByName(name)
+			if ood == nil {
+				return false
+			}
+			return x.WhichOneof(ood) != nil
+		}
+		if !fd.HasPresence() {
+			return true
+		}
+		return x.Has(fd)
+	case protoreflect.Map:
+		if s.desc.MapKey().Kind() != protoreflect.StringKind {
+			return false
+		}
+		key := protoreflect.ValueOfString(str).MapKey()
+		return x.Has(key)
+	default:
+		return false
+	}
+}
+
 // ShiftByName returns a child scope of this scope by indexing this scope
 // by name.
 func (s *scope) ShiftByName(name string) (scope, error) {

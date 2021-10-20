@@ -275,6 +275,20 @@ message Value {
     // Remember that map values use a synthetic field name, see
     // https://developers.google.com/protocol-buffers/docs/proto3#backwards_compatibility.
     string scope_is = 44;
+
+    // scope_has yields a boolean value and this value is true if and only if
+    // one of the following conditions holds:
+    //
+    // 1. The scope value is a message, has a field with the specified name, and
+    // the field is set. Fields that cannot distinguish being unset from a
+    // zero value are always considered set.
+    //
+    // 2. The scope value is a message, has a oneof with the specified name, and
+    // one of the oneof fields is set.
+    //
+    // 3. The scope value is a map with string keys, and the map has a value
+    // under the given key.
+    string scope_has = 45;
   }
 
   // Branch describes a conditional branch.

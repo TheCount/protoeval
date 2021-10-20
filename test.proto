@@ -17,3 +17,14 @@ message ScopeTest {
   map<int32, int32> an_int32_map = 7;
   map<int64, int32> an_int64_map = 8;
 }
+
+// HasTest contains fields and a oneof for testing Value.has.
+message HasTest {
+  int32 field_without_presence = 1;
+  repeated int32 list_without_presence = 2;
+  oneof test {
+    int32 field_with_presence = 3;
+  }
+  map<string, int32> a_string_map = 4;
+  map<int32, int32> an_int_map = 5;
+}
