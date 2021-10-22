@@ -86,57 +86,48 @@ message Value {
     // bool is an explicit boolean value.
     bool bool = 10;
 
-    // int32 is an explicit int32 value.
-    int32 int32 = 11;
+    // int is an explicit signed integer value.
+    int64 int = 11;
 
-    // int64 is an explicit int64 value.
-    int64 int64 = 12;
-
-    // uint32 is an explicit uint32 value.
-    uint32 uint32 = 13;
-
-    // uint64 is an explicit uint64 value.
-    uint64 uint64 = 14;
-
-    // float is an explicit float value.
-    float float = 15;
+    // uint is an explicit unsigned integer value.
+    uint64 uint = 12;
 
     // double is an explicit double value.
-    double double = 16;
+    double double = 13;
 
     // string is an explicit string value.
-    string string = 17;
+    string string = 14;
 
     // bytes is an explicit bytes value.
-    bytes bytes = 18;
+    bytes bytes = 15;
 
     // enum is an explicit enum value.
-    Enum enum = 19;
+    Enum enum = 16;
 
     // list is an explicit list value based on scope.
-    List list = 20;
+    List list = 17;
 
     // map is an explicit map value based on scope.
-    Map map = 21;
+    Map map = 18;
 
     // message is an explicit message value based on scope.
-    Message message = 22;
+    Message message = 19;
 
     // basic_message is an explicit message value. It uses the protobuf Any
     // mechanism. While this doesn't allow complex message generation, the
     // specification of the message itself in a configuration file will be
     // less cluttered.
-    google.protobuf.Any basic_message = 23;
+    google.protobuf.Any basic_message = 20;
 
     // duration is an explicit duration.
-    google.protobuf.Duration duration = 24;
+    google.protobuf.Duration duration = 21;
 
     // timestamp is an explicit timestamp.
-    google.protobuf.Timestamp timestamp = 25;
+    google.protobuf.Timestamp timestamp = 22;
 
     // not yields a boolean value which is the inverse of the specified value
     // based on scope. It is an error if the specified value is not boolean.
-    Value not = 26;
+    Value not = 23;
 
     // all_of yields a boolean value, which is true if and only if all values
     // in the list (based on scope) are true.
@@ -144,7 +135,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is true.
-    ValueList all_of = 27;
+    ValueList all_of = 24;
 
     // any_of yields a boolean value, and is true if and only if there is a
     // value in the list (based on scope) which is true.
@@ -152,7 +143,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is false.
-    ValueList any_of = 28;
+    ValueList any_of = 25;
 
     // eq yields a boolean value, which is true if and only if all values in
     // the list are equal. Two NaN values are considered equal for this purpose.
@@ -160,7 +151,7 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList eq = 29;
+    ValueList eq = 26;
 
     // neq yields a boolean value, which is true if and only if all values
     // in the list are mutually distinct. Two NaN values are not considered
@@ -169,7 +160,7 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList neq = 30;
+    ValueList neq = 27;
 
     // lt yields a boolean value, which is true if and only if the values in
     // the list form a strictly increasing sequence.
@@ -180,7 +171,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList lt = 31;
+    ValueList lt = 28;
 
     // lte yields a boolean value, which is true if and only if the values in
     // the list form an increasing sequence.
@@ -191,7 +182,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList lte = 32;
+    ValueList lte = 29;
 
     // gt yields a boolean value, which is true if and only if the values in
     // the list form a strictly decreasing sequence.
@@ -202,7 +193,7 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList gt = 33;
+    ValueList gt = 30;
 
     // gte yields a boolean value, which is true if and only if the values in
     // the list form a decreasing sequence.
@@ -213,47 +204,47 @@ message Value {
     // Otherwise, if a NaN occurs, the result is false.
     // Otherwise, if the list is empty or has only one element,
     // the result is true.
-    ValueList gte = 34;
+    ValueList gte = 31;
 
     // seq yields the value of last evaluated element in the list (based on
     // scope). This is normally the final element, but occurrences of break
     // or continue may cut the evaluation short. If no elements are evaluated,
     // seq yields nil.
-    ValueList seq = 35;
+    ValueList seq = 32;
 
     // switch yields a value (based on scope) based on conditions.
-    Switch switch = 36;
+    Switch switch = 33;
 
     // while repeatedly evaluates the then part of the branch for as long
     // as the case yields true. The final value from then is returned.
     // If then is never evaluated, nil is returned.
-    Branch while = 37;
+    Branch while = 34;
 
     // break breaks out of the given number of while evaluations.
     // while evaluations where break occurs in the conditional part do not
     // count.
-    uint32 break = 38;
+    uint32 break = 35;
 
     // continue continues the given nth enclosing while evaluation.
     // while evaluations where continue occurs in the conditional
     // part do not count.
-    uint32 continue = 39;
+    uint32 continue = 36;
 
     // store stores the evaluated value in the environment.
     // The completely evaluated value can be retrieved again with load.
-    StoredValue store = 40;
+    StoredValue store = 37;
 
     // proc stores the value in the environment.
     // Only when loaded, the value will be evaluated with the then valid
     // environment and scope.
-    StoredValue proc = 41;
+    StoredValue proc = 38;
 
     // load loads a value from the environment.
     // If no previous store is present, the value is nil.
-    string load = 42;
+    string load = 39;
 
     // program is a user defined program to determine the value.
-    string program = 43;
+    string program = 40;
 
     // scope_is yields a boolean value and is true if and only if the
     // given string matches a *full* field or type name (e. g.,
@@ -274,7 +265,7 @@ message Value {
     // Lists and list elements share the same field name (of a repeated field).
     // Remember that map values use a synthetic field name, see
     // https://developers.google.com/protocol-buffers/docs/proto3#backwards_compatibility.
-    string scope_is = 44;
+    string scope_is = 41;
 
     // scope_has yields a boolean value and this value is true if and only if
     // one of the following conditions holds:
@@ -288,7 +279,7 @@ message Value {
     //
     // 3. The scope value is a map with string keys, and the map has a value
     // under the given key.
-    string scope_has = 45;
+    string scope_has = 42;
   }
 
   // Branch describes a conditional branch.

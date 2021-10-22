@@ -114,16 +114,10 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		return nil, nil
 	case *Value_Bool:
 		return x.Bool, nil
-	case *Value_Int32:
-		return x.Int32, nil
-	case *Value_Int64:
-		return x.Int64, nil
-	case *Value_Uint32:
-		return x.Uint32, nil
-	case *Value_Uint64:
-		return x.Uint64, nil
-	case *Value_Float:
-		return x.Float, nil
+	case *Value_Int:
+		return x.Int, nil
+	case *Value_Uint:
+		return x.Uint, nil
 	case *Value_Double:
 		return x.Double, nil
 	case *Value_String_:
