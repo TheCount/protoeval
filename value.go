@@ -1,3 +1,3 @@
 package protoeval
 
-//go:generate protoc --go_out=. value.proto
+//go:generate protoc --go_out=. protoeval/value.proto
