@@ -23,6 +23,7 @@ type Env struct {
 
 // NewEnv creates a new, empty environment.
 func NewEnv() *Env {
+	initCelTypeRegistry()
 	return &Env{
 		values:     make(map[string]interface{}),
 		cyclesLeft: DefaultEvalMax,

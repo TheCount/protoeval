@@ -571,9 +571,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		}
 		return value, nil
 	case *Value_Program:
-		initCelTypes()
 		celEnv, err := cel.NewEnv(
-			cel.Types(celTypes...),
+			cel.CustomTypeAdapter(celTypeRegistry),
+			cel.CustomTypeProvider(celTypeRegistry),
 			cel.Declarations(
 				decls.NewVar("scope",
 					decls.NewObjectType("com.github.thecount.protoeval.Scope"),

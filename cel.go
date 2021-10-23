@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
@@ -17,27 +18,34 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// celTypes is the list of types we make available to all CEL programs.
-// These are all protobuf message types linked into the binary, plus special
-// types implementing cel's ref.Type interface.
-var celTypes []interface{}
+// celTypeRegistry is the CEL registry of types we make available to all CEL
+// programs.
+// These are currently all protobuf message types linked into the binary, plus
+// some extra types.
+var celTypeRegistry ref.TypeRegistry
 
-// initCelTypesOnce ensures the celTypes variable is initialised only once,
-// via initCelTypes().
-// We don't initialise celTypes via this package's init function because
-// it might be called before all protobuf types are registered.
-var initCelTypesOnce sync.Once
+// initCelTypeRegistryOnce ensures the celTypeRegistry variable is initialised
+// only once, via initCelTypeRegistry().
+// We don't initialise the celTypeRegistry via this package's init function
+// because it might be called before all protobuf types are registered.
+var initCelTypeRegistryOnce sync.Once
 
-// initCelTypes ensures the celTypes variable is initialised.
-func initCelTypes() {
-	initCelTypesOnce.Do(func() {
+// initCelTypeRegistry ensures the celTypeRegistry variable is initialised.
+func initCelTypeRegistry() {
+	initCelTypeRegistryOnce.Do(func() {
+		messages := make([]proto.Message, 0)
 		protoregistry.GlobalTypes.
 			RangeMessages(func(mt protoreflect.MessageType) bool {
 				if msg := mt.Zero(); msg != nil {
-					celTypes = append(celTypes, msg.Interface())
+					messages = append(messages, msg.Interface())
 				}
 				return true
 			})
+		reg, err := types.NewRegistry(messages...)
+		if err != nil {
+			panic(err)
+		}
+		celTypeRegistry = reg
 	})
 }
 
