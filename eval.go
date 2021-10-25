@@ -9,6 +9,7 @@ import (
 	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
+	"github.com/google/cel-go/common/types/traits"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -560,6 +561,48 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		return types.Bool(env.scope.Matches(protoreflect.FullName(x.ScopeIs))), nil
 	case *Value_ScopeHas:
 		return types.Bool(env.scope.Has(x.ScopeHas)), nil
+	case *Value_ScopeRange:
+		sv := env.scope.Value()
+		switch y := sv.(type) {
+		case traits.Lister:
+			for i, iter := 0, y.Iterator(); iter.HasNext() == types.True; i++ {
+				env.scope.PushArg(iter.Next())
+				env.scope.PushArg(types.Int(i))
+				rv, err := eval(env, cyclesLeft, x.ScopeRange)
+				if err2 := env.scope.DropArgs(2); err2 != nil {
+					return nil,
+						fmt.Errorf("list range element %d drop index/value: %w", i, err2)
+				}
+				if err != nil {
+					return rv, fmt.Errorf("eval list range element %d: %w", i, err)
+				}
+				if rv != types.True {
+					return rv, nil
+				}
+			}
+			return types.NullValue, nil
+		case traits.Mapper:
+			for iter := y.Iterator(); iter.HasNext() == types.True; {
+				key := iter.Next()
+				value := y.Get(key)
+				env.scope.PushArg(value)
+				env.scope.PushArg(key)
+				rv, err := eval(env, cyclesLeft, x.ScopeRange)
+				if err2 := env.scope.DropArgs(2); err2 != nil {
+					return nil, fmt.Errorf("map range key %v drop index/value: %w",
+						key.Value(), err2)
+				}
+				if err != nil {
+					return rv, fmt.Errorf("eval map range key %v: %w", key.Value(), err)
+				}
+				if rv != types.True {
+					return rv, nil
+				}
+			}
+			return types.NullValue, nil
+		default:
+			return nil, fmt.Errorf("type %T not iterable", sv.Value())
+		}
 	default:
 		panic(fmt.Sprintf("BUG: unsupported value type %T", value.Value))
 	}

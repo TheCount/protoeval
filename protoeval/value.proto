@@ -262,6 +262,23 @@ message Value {
     // 3. The scope value is a map with string keys, and the map has a value
     // under the given key.
     string scope_has = 42;
+
+    // scope_range ranges over the iterable scope value, evaluating the Value
+    // for each element. It is an error if the current scope value is not an
+    // aggregate, i. e., not a list or a map.
+    //
+    // Two arguments will be added before each evaluation, and
+    // removed after each evaluation: for a list, the 0-th argument is the zero
+    // based list index, the 1st argument is the list value. For a map, the 0-th
+    // argument is the map key, and the 1st argument is the map value.
+    //
+    // A list will be evaluated in order. The evaluation order for a map is
+    // unspecified.
+    //
+    // If an evaluation yields a value other than boolean true, evaluation
+    // stops early and scope_range yields that value. Otherwise, scope_range
+    // yields nil.
+    Value scope_range = 43;
   }
 
   // Branch describes a conditional branch.
