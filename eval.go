@@ -54,8 +54,10 @@ func (errContinue) Is(err error) bool {
 }
 
 // Eval evaluates the given message within the given environment according
-// to the specified value.
-func Eval(env *Env, msg proto.Message, value *Value) (interface{}, error) {
+// to the specified value, with the given arguments.
+func Eval(
+	env *Env, msg proto.Message, value *Value, args ...interface{},
+) (interface{}, error) {
 	if env == nil {
 		return nil, errors.New("env is nil")
 	}
@@ -67,6 +69,13 @@ func Eval(env *Env, msg proto.Message, value *Value) (interface{}, error) {
 	}
 	rmsg := msg.ProtoReflect()
 	env.scope.Init(rmsg)
+	for i := len(args) - 1; i >= 0; i-- {
+		argVal := celTypeRegistry.NativeToValue(args[i])
+		if types.IsError(argVal) {
+			return nil, fmt.Errorf("arg %d: %w", i, argVal.Value().(error))
+		}
+		env.scope.PushArg(argVal)
+	}
 	cyclesLeft := env.cyclesLeft
 	result, err := eval(env, &cyclesLeft, value)
 	if err != nil {
@@ -92,6 +101,8 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 	switch x := value.Scope.(type) {
 	case nil:
 		// Scope remains unchanged
+	case *Value_Same:
+		env = env.shiftScope()
 	case *Value_Name:
 		env, err = env.shiftScopeByName(x.Name)
 	case *Value_Index:
@@ -108,10 +119,23 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 	if err != nil {
 		return nil, err
 	}
+	// handle args
+	if err = env.scope.DropArgs(value.DropArgs); err != nil {
+		return nil, err
+	}
+	for i := len(value.Args) - 1; i >= 0; i-- {
+		rv, err := eval(env, cyclesLeft, value.Args[i])
+		if err != nil {
+			return nil, fmt.Errorf("arg %d: %w", i, err)
+		}
+		env.scope.PushArg(rv)
+	}
 	// evaluate
 	switch x := value.Value.(type) {
 	case nil:
 		return env.scope.Value(), nil
+	case *Value_Arg:
+		return env.scope.Arg(x.Arg)
 	case *Value_This:
 		return eval(env, cyclesLeft, x.This)
 	case *Value_Parent:

@@ -102,6 +102,13 @@ func (e *Env) Clone() *Env {
 	return result
 }
 
+// shiftScope returns a shallow copy of this environment with the same scope.
+func (e *Env) shiftScope() *Env {
+	newenv := *e
+	newenv.scope = e.scope.Shift()
+	return &newenv
+}
+
 // shiftScopeByName returns a shallow copy of this environment with the
 // scope shifted by the specified name.
 func (e *Env) shiftScopeByName(name string) (*Env, error) {

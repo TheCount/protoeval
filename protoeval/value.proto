@@ -16,9 +16,32 @@ import "google/protobuf/timestamp.proto";
 // A scope arises from how the fields in a Value are used (see their
 // documentation). The initial scope is the protobuf message to be evaluated.
 message Value {
+  // drop_args drops the specified number of arguments (optional). That is, if
+  // drop_args = n, args 0 through n-1 are dropped and the previously n-th
+  // argument becomes the 0-th argument.
+  // drop_args is applied before the args field is.
+  //
+  // Since arguments are available only from the current scope and all
+  // subscopes, explicitly dropping arguments may be unnecessary.
+  uint32 drop_args = 1;
+
+  // args adds the specified arguments. Arguments can be accessed by a
+  // zero based index. Previous arguments are shifted, e. g., if the length
+  // of args is n, the previous 0-th argument becomes the n-th argument.
+  // Optional.
+  //
+  // The args field is applied after the drop_args field and the scope
+  // oneof. The arguments are available in the resulting scope and all
+  // subscopes.
+  repeated Value args = 2;
+
   // scope changes the scope relative to the current scope. If omitted, the
   // current scope remains unchanged.
   oneof scope {
+    // same forces the creation of a new scope identical to its parent scope.
+    // This can be useful in combination with argument handling.
+    google.protobuf.Empty same = 3;
+
     // name selects a new scope based on the given name.
     //
     // If the current scope is of message kind with non-repeated cardinality,
@@ -30,7 +53,7 @@ message Value {
     // error if no such map entry exists.
     //
     // In all other cases, use of name is an error.
-    string name = 1;
+    string name = 4;
 
     // index selects a new scope based on the given index.
     //
@@ -38,7 +61,7 @@ message Value {
     // with the given index. It is an error if the index is out of bounds.
     //
     // In all other cases, use of index is an error.
-    uint32 index = 2;
+    uint32 index = 5;
 
     // bool_key selects a new scope based on the given boolean key.
     //
@@ -47,7 +70,7 @@ message Value {
     // error if no such map entry exists.
     //
     // In all other cases, use of bool_key is an error.
-    bool bool_key = 3;
+    bool bool_key = 6;
 
     // uint_key selects a new scope based on the given unsigned integer key.
     //
@@ -55,7 +78,7 @@ message Value {
     // uint32, uint64, fixed32, or fixed64, the scope is shifted to
     // the map value for the given uint_key. It is an error if no such map
     // entry exists.
-    uint64 uint_key = 4;
+    uint64 uint_key = 7;
 
     // int_key selects a new scope based on the given signed integer key.
     //
@@ -63,71 +86,74 @@ message Value {
     // int32, sint32, int64, sint64, sfixed32, or sfixed64, the scope is
     // shifted to the map value for the given int_key. It is an error if no
     // such map entry exists.
-    int64 int_key = 5;
+    int64 int_key = 8;
   }
 
   // value describes the actual value. If omitted, the value will be the
   // scope value.
   oneof value {
+    // arg yields the numbered argument.
+    uint32 arg = 9;
+
     // this is a value based on scope. It can be used to chain multiple scope
     // shifts.
-    Value this = 6;
+    Value this = 10;
 
     // parent is a value based on the parent scope. It can be used to backtrack
     // from the current scope.
-    Value parent = 7;
+    Value parent = 11;
 
     // default is the default value for the scope.
-    google.protobuf.Empty default = 8;
+    google.protobuf.Empty default = 12;
 
     // nil is an explicit nil value.
-    google.protobuf.Empty nil = 9;
+    google.protobuf.Empty nil = 13;
 
     // bool is an explicit boolean value.
-    bool bool = 10;
+    bool bool = 14;
 
     // int is an explicit signed integer value.
-    int64 int = 11;
+    int64 int = 15;
 
     // uint is an explicit unsigned integer value.
-    uint64 uint = 12;
+    uint64 uint = 16;
 
     // double is an explicit double value.
-    double double = 13;
+    double double = 17;
 
     // string is an explicit string value.
-    string string = 14;
+    string string = 18;
 
     // bytes is an explicit bytes value.
-    bytes bytes = 15;
+    bytes bytes = 19;
 
     // enum is an explicit enum value.
-    Enum enum = 16;
+    Enum enum = 20;
 
     // list is an explicit list value based on scope.
-    List list = 17;
+    List list = 21;
 
     // map is an explicit map value based on scope.
-    Map map = 18;
+    Map map = 22;
 
     // message is an explicit message value based on scope.
-    Message message = 19;
+    Message message = 23;
 
     // basic_message is an explicit message value. It uses the protobuf Any
     // mechanism. While this doesn't allow complex message generation, the
     // specification of the message itself in a configuration file will be
     // less cluttered.
-    google.protobuf.Any basic_message = 20;
+    google.protobuf.Any basic_message = 24;
 
     // duration is an explicit duration.
-    google.protobuf.Duration duration = 21;
+    google.protobuf.Duration duration = 25;
 
     // timestamp is an explicit timestamp.
-    google.protobuf.Timestamp timestamp = 22;
+    google.protobuf.Timestamp timestamp = 26;
 
     // not yields a boolean value which is the inverse of the specified value
     // based on scope. It is an error if the specified value is not boolean.
-    Value not = 23;
+    Value not = 27;
 
     // all_of yields a boolean value, which is true if and only if all values
     // in the list (based on scope) are true.
@@ -135,7 +161,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is true.
-    ValueList all_of = 24;
+    ValueList all_of = 28;
 
     // any_of yields a boolean value, and is true if and only if there is a
     // value in the list (based on scope) which is true.
@@ -143,7 +169,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is false.
-    ValueList any_of = 25;
+    ValueList any_of = 29;
 
     // eq yields a boolean value, which is true if and only if all values in
     // the list are equal. Two NaN values are considered equal for this purpose.
@@ -151,7 +177,7 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList eq = 26;
+    ValueList eq = 30;
 
     // neq yields a boolean value, which is true if and only if all values
     // in the list are mutually distinct. Two NaN values are not considered
@@ -160,47 +186,47 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList neq = 27;
+    ValueList neq = 31;
 
     // seq yields the value of last evaluated element in the list (based on
     // scope). This is normally the final element, but occurrences of break
     // or continue may cut the evaluation short. If no elements are evaluated,
     // seq yields nil.
-    ValueList seq = 28;
+    ValueList seq = 32;
 
     // switch yields a value (based on scope) based on conditions.
-    Switch switch = 29;
+    Switch switch = 33;
 
     // while repeatedly evaluates the then part of the branch for as long
     // as the case yields true. The final value from then is returned.
     // If then is never evaluated, nil is returned.
-    Branch while = 30;
+    Branch while = 34;
 
     // break breaks out of the given number of while evaluations.
     // while evaluations where break occurs in the conditional part do not
     // count.
-    uint32 break = 31;
+    uint32 break = 35;
 
     // continue continues the given nth enclosing while evaluation.
     // while evaluations where continue occurs in the conditional
     // part do not count.
-    uint32 continue = 32;
+    uint32 continue = 36;
 
     // store stores the evaluated value in the environment.
     // The completely evaluated value can be retrieved again with load.
-    StoredValue store = 33;
+    StoredValue store = 37;
 
     // proc stores the value in the environment.
     // Only when loaded, the value will be evaluated with the then valid
     // environment and scope.
-    StoredValue proc = 34;
+    StoredValue proc = 38;
 
     // load loads a value from the environment.
     // If no previous store is present, the value is nil.
-    string load = 35;
+    string load = 39;
 
     // program is a user defined program to determine the value.
-    string program = 36;
+    string program = 40;
 
     // scope_is yields a boolean value and is true if and only if the
     // given string matches a *full* field or type name (e. g.,
@@ -221,7 +247,7 @@ message Value {
     // Lists and list elements share the same field name (of a repeated field).
     // Remember that map values use a synthetic field name, see
     // https://developers.google.com/protocol-buffers/docs/proto3#backwards_compatibility.
-    string scope_is = 37;
+    string scope_is = 41;
 
     // scope_has yields a boolean value and this value is true if and only if
     // one of the following conditions holds:
@@ -235,7 +261,7 @@ message Value {
     //
     // 3. The scope value is a map with string keys, and the map has a value
     // under the given key.
-    string scope_has = 38;
+    string scope_has = 42;
   }
 
   // Branch describes a conditional branch.

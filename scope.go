@@ -12,6 +12,10 @@ import (
 // scope describes an evaluation scope.
 // Each scope instance is a node in a scope tree.
 type scope struct {
+	// args is the current argument stack. From this scope's perspective,
+	// if args is non-empty, argument 0 is the last element of args.
+	args []ref.Val
+
 	// desc is the field descriptor leading up to the scope value.
 	// For the root scope, desc is nil.
 	desc protoreflect.FieldDescriptor
@@ -94,6 +98,15 @@ func (s *scope) Has(str string) bool {
 		return x.Has(key)
 	default:
 		return false
+	}
+}
+
+// scope returns a child scope of this scope with identical content.
+func (s *scope) Shift() scope {
+	return scope{
+		desc:   s.desc,
+		value:  s.value,
+		parent: s,
 	}
 }
 
@@ -263,4 +276,55 @@ func (s *scope) ShiftToParent() (scope, error) {
 		return scope{}, errors.New("already at the root scope")
 	}
 	return *s.parent, nil
+}
+
+// PushArg pushes the given argument onto the argument stack of this scope.
+func (s *scope) PushArg(arg ref.Val) {
+	s.args = append(s.args, arg)
+}
+
+// DropArgs drops the given number of arguments from the argument stack.
+func (s *scope) DropArgs(n uint32) error {
+	if n > math.MaxInt32 {
+		return errors.New("excess number of arguments to drop")
+	}
+	return s.dropArgs(int(n))
+}
+
+// dropArgs drops the given number of arguments from the argument stack.
+func (s *scope) dropArgs(n int) error {
+	if s == nil {
+		return fmt.Errorf("%d arguments left to drop but stack empty", n)
+	}
+	if n > len(s.args) {
+		if err := s.parent.dropArgs(n - len(s.args)); err != nil {
+			return err
+		}
+		s.args = nil
+		return nil
+	}
+	s.args = s.args[:len(s.args)-n]
+	return nil
+}
+
+// Arg returns the n-th argument.
+func (s *scope) Arg(n uint32) (ref.Val, error) {
+	if n > math.MaxInt32 {
+		return nil, errors.New("argument number out of bounds")
+	}
+	if a, ok := s.arg(int(n)); ok {
+		return a, nil
+	}
+	return nil, fmt.Errorf("no such arg: %d", n)
+}
+
+// arg returns the n-th argument if it exists.
+func (s *scope) arg(n int) (ref.Val, bool) {
+	if s == nil {
+		return nil, false
+	}
+	if n >= len(s.args) {
+		return s.parent.arg(n - len(s.args))
+	}
+	return s.args[len(s.args)-n-1], true
 }
