@@ -1,28 +1,12 @@
 package protoeval
 
 import (
-	"bytes"
 	"fmt"
-	"math"
 	"reflect"
-	"time"
 
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
-)
-
-// Well-known type (WKT) names.
-var (
-	// durationName is the protobuf full name for the duration WKT.
-	durationName = (&durationpb.Duration{}).ProtoReflect().
-			Descriptor().FullName()
-
-	// timestampName is the protobuf full name for the timestamp WKT.
-	timestampName = (&timestamppb.Timestamp{}).ProtoReflect().
-			Descriptor().FullName()
 )
 
 // getProtoType returns the Go type for the protobuf type specified by the
@@ -30,13 +14,14 @@ var (
 // typ must be the empty string for protobuf kinds which determine the type
 // automatically.
 //
-// If kind is Value_INVALID and typ is empty, (nil, nil) is returned.
+// If kind is Value_INVALID and typ is empty, the type of interface{} is
+// returned.
 //
 // If kind is Value_MESSAGE, type must be the full message type name,
 // and the message type must be linked in the binary.
 //
 // If kind is Value_ENUM, type must be the full enum type name. In this case,
-// the returned type is the type of protoreflect.EnumValueDescriptor.
+// the returned type is the type of protoreflect.EnumNumber.
 func getProtoType(kind Value_Kind, typeName string) (reflect.Type, error) {
 	protoName := protoreflect.FullName(typeName)
 	if protoName != "" {
@@ -45,19 +30,12 @@ func getProtoType(kind Value_Kind, typeName string) (reflect.Type, error) {
 		}
 		switch kind {
 		case Value_MESSAGE:
-			switch protoreflect.FullName(typeName) {
-			case durationName:
-				return reflect.TypeOf(time.Duration(0)), nil
-			case timestampName:
-				return reflect.TypeOf(time.Time{}), nil
-			default:
-				msgType, err := protoregistry.GlobalTypes.FindMessageByName(protoName)
-				if err != nil {
-					return nil, fmt.Errorf("find protobuf message type '%s': %w",
-						protoName, err)
-				}
-				return reflect.TypeOf(msgType.New().Interface()), nil
+			msgType, err := protoregistry.GlobalTypes.FindMessageByName(protoName)
+			if err != nil {
+				return nil, fmt.Errorf("find protobuf message type '%s': %w",
+					protoName, err)
 			}
+			return reflect.TypeOf(msgType.Zero().Interface()), nil
 		case Value_ENUM:
 			enumType, err := protoregistry.GlobalTypes.FindEnumByName(protoName)
 			if err != nil {
@@ -68,7 +46,7 @@ func getProtoType(kind Value_Kind, typeName string) (reflect.Type, error) {
 			if values.Len() == 0 { // can only happen with proto2 enums
 				return nil, fmt.Errorf("enum '%s' is empty", typeName)
 			}
-			return reflect.TypeOf(values.Get(0)), nil
+			return reflect.TypeOf(protoreflect.EnumNumber(0)), nil
 		default:
 			return nil, fmt.Errorf("non-empty type '%s' with protobuf kind '%s'",
 				typeName, kind)
@@ -76,7 +54,7 @@ func getProtoType(kind Value_Kind, typeName string) (reflect.Type, error) {
 	}
 	switch kind {
 	case Value_INVALID:
-		return nil, nil
+		return reflect.TypeOf((*interface{})(nil)).Elem(), nil
 	case Value_DOUBLE:
 		return reflect.TypeOf(float64(0)), nil
 	case Value_FLOAT:
@@ -97,7 +75,7 @@ func getProtoType(kind Value_Kind, typeName string) (reflect.Type, error) {
 		return reflect.TypeOf(uint32(0)), nil
 	default:
 		return nil, fmt.Errorf(
-			"kind '%s' invalid or requires a non-zero type name", kind)
+			"kind '%s' invalid or requires a non-empty type name", kind)
 	}
 }
 
@@ -116,213 +94,106 @@ func getProtoMapKeyType(kind Value_Kind) (reflect.Type, error) {
 	}
 }
 
-// isValidMapKeyType determines whether typ is a valid protobuf map key type.
-func isValidMapKeyType(typ reflect.Type) bool {
-	switch typ.Kind() {
-	case reflect.Int64, reflect.Uint64, reflect.Int32, reflect.Uint32,
-		reflect.Bool, reflect.String:
-		return true
-	default:
-		return false
-	}
-}
-
-// protoEqual generalises proto.Equal to all possible protobuf values, not
-// just messages.
-func protoEqual(a, b interface{}) bool {
-	switch x := a.(type) {
-	case nil, int64, uint64, int32, bool, string, time.Duration:
-		return a == b
-	case float32: // special NaN treatment
-		y, ok := b.(float32)
-		if math.IsNaN(float64(x)) {
-			return ok && math.IsNaN(float64(y))
+// go2protofd converts the given go value to a value assignable to the given
+// field in the given protobuf message.
+func go2protofd(
+	goval interface{}, msg protoreflect.Message, fd protoreflect.FieldDescriptor,
+) (protoreflect.Value, error) {
+	value := reflect.ValueOf(goval)
+	switch {
+	case fd.IsList():
+		if value.Kind() != reflect.Slice && value.Kind() != reflect.Array {
+			return protoreflect.Value{}, fmt.Errorf("expected list, got %T", goval)
 		}
-		return ok && x == y
-	case float64: // special NaN treatment
-		y, ok := b.(float64)
-		if math.IsNaN(x) {
-			return ok && math.IsNaN(y)
+		typeName := ""
+		switch fd.Kind() {
+		case protoreflect.EnumKind:
+			typeName = string(fd.Enum().FullName())
+		case protoreflect.MessageKind:
+			typeName = string(fd.Message().FullName())
 		}
-		return ok && x == y
-	case proto.Message:
-		y, ok := b.(proto.Message)
-		return ok && proto.Equal(x, y)
-	case time.Time:
-		y, ok := b.(time.Time)
-		return ok && x.Equal(y)
-	case []byte:
-		y, ok := b.([]byte)
-		return ok && bytes.Equal(x, y)
-	case protoreflect.EnumValueDescriptor:
-		y, ok := b.(protoreflect.EnumValueDescriptor)
-		return ok &&
-			x.Parent().FullName() == y.Parent().FullName() &&
-			x.Number() == y.Number()
-	}
-	x := reflect.ValueOf(a)
-	y := reflect.ValueOf(b)
-	xType := x.Type()
-	yType := y.Type()
-	switch xType.Kind() {
-	case reflect.Slice:
-		if yType.Kind() != reflect.Slice {
-			return false
+		elemType, err := getProtoType(Value_Kind(fd.Kind()), typeName)
+		if err != nil {
+			return protoreflect.Value{}, err
 		}
-		if x.Len() != y.Len() {
-			return false
-		}
-		for i := 0; i < x.Len(); i++ {
-			if !protoEqual(x.Index(i).Interface(), y.Index(i).Interface()) {
-				return false
+		result := msg.NewField(fd).List()
+		for i := 0; i != value.Len(); i++ {
+			elemValue := value.Index(i)
+			if !elemValue.Type().ConvertibleTo(elemType) {
+				return protoreflect.Value{}, fmt.Errorf(
+					"unable to convert list element %d type %s to %s",
+					i, elemValue.Type(), elemType)
 			}
-		}
-		return true
-	case reflect.Map:
-		if yType.Kind() != reflect.Map || xType.Key() != yType.Key() {
-			return false
-		}
-		if x.Len() != y.Len() {
-			return false
-		}
-		keys := x.MapKeys()
-		for _, key := range keys {
-			xVal := x.MapIndex(key)
-			yVal := y.MapIndex(key)
-			if !yVal.IsValid() {
-				return false
+			converted := elemValue.Convert(elemType).Interface()
+			if x, ok := converted.(proto.Message); ok {
+				converted = x.ProtoReflect()
 			}
-			if !protoEqual(xVal.Interface(), yVal.Interface()) {
-				return false
+			result.Append(protoreflect.ValueOf(converted))
+		}
+		return protoreflect.ValueOfList(result), nil
+	case fd.IsMap():
+		if value.Kind() != reflect.Map {
+			return protoreflect.Value{}, fmt.Errorf("expected map, got %T", goval)
+		}
+		keyType, err := getProtoMapKeyType(Value_Kind(fd.MapKey().Kind()))
+		if err != nil {
+			return protoreflect.Value{}, err
+		}
+		typeName := ""
+		switch fd.MapValue().Kind() {
+		case protoreflect.EnumKind:
+			typeName = string(fd.MapValue().Enum().FullName())
+		case protoreflect.MessageKind:
+			typeName = string(fd.MapValue().Message().FullName())
+		}
+		valueType, err := getProtoType(Value_Kind(fd.MapValue().Kind()), typeName)
+		if err != nil {
+			return protoreflect.Value{}, err
+		}
+		result := msg.NewField(fd).Map()
+		for iter := value.MapRange(); iter.Next(); {
+			k, v := iter.Key(), iter.Value()
+			if !k.Type().ConvertibleTo(keyType) {
+				return protoreflect.Value{}, fmt.Errorf(
+					"unable to convert map key %v of type %s to %s",
+					k.Interface(), k.Type(), keyType)
 			}
+			if !v.Type().ConvertibleTo(valueType) {
+				return protoreflect.Value{}, fmt.Errorf(
+					"unable to convert map value for key %v of type %s to %s",
+					k.Interface(), v.Type(), valueType)
+			}
+			keyValue := protoreflect.ValueOf(k.Convert(keyType).Interface()).MapKey()
+			convertedValue := v.Convert(valueType).Interface()
+			if x, ok := convertedValue.(proto.Message); ok {
+				convertedValue = x.ProtoReflect()
+			}
+			result.Set(keyValue, protoreflect.ValueOf(convertedValue))
 		}
-		return true
-	default:
-		panic(fmt.Sprintf("BUG: unsupported protoEqual types %T/%T", a, b))
-	}
-}
-
-// isComparable reports whether the specified type is comparable.
-// Floating point types count as comparable, even though the NaN value is not
-// comparable. Enum types are not comparable. String, []byte, time.Duration, and
-// time.Time are comparable.
-func isComparable(typ reflect.Type) bool {
-	switch typ {
-	case reflect.TypeOf(float64(0)), reflect.TypeOf(float32(0)),
-		reflect.TypeOf(int64(0)), reflect.TypeOf(uint64(0)),
-		reflect.TypeOf(int32(0)), reflect.TypeOf(uint32(0)),
-		reflect.TypeOf(""), reflect.TypeOf([]byte{}),
-		reflect.TypeOf(time.Duration(0)), reflect.TypeOf(time.Time{}):
-		return true
-	default:
-		return false
-	}
-}
-
-// isNaN returns true if and only if value is a float32 or float64 NaN value.
-func isNaN(value interface{}) bool {
-	switch x := value.(type) {
-	case float32:
-		return math.IsNaN(float64(x))
-	case float64:
-		return math.IsNaN(x)
-	default:
-		return false
-	}
-}
-
-// protoCompare returns -1, 0, or 1 if a is smaller than, equal to, or
-// greater than b, respectively. If a and b have distinct protoCompare panics.
-// If either a or b is NaN, the result is unspecified.
-func protoCompare(a, b interface{}) int {
-	s := func(smaller, equal bool) int {
-		switch {
-		case smaller:
-			return -1
-		case equal:
-			return 0
-		default:
-			return 1
+		return protoreflect.ValueOfMap(result), nil
+	// the following case must come after the list/map check
+	case fd.Kind() == protoreflect.MessageKind:
+		if x, ok := goval.(proto.Message); ok {
+			return protoreflect.ValueOf(x.ProtoReflect()), nil
 		}
-	}
-	switch x := a.(type) {
-	case float64:
-		y := b.(float64)
-		return s(x < y, x == y)
-	case float32:
-		y := b.(float32)
-		return s(x < y, x == y)
-	case int64:
-		y := b.(int64)
-		return s(x < y, x == y)
-	case uint64:
-		y := b.(uint64)
-		return s(x < y, x == y)
-	case int32:
-		y := b.(int32)
-		return s(x < y, x == y)
-	case uint32:
-		y := b.(uint32)
-		return s(x < y, x == y)
-	case string:
-		y := b.(string)
-		return s(x < y, x == y)
-	case []byte:
-		y := b.([]byte)
-		return bytes.Compare(x, y)
-	case time.Duration:
-		y := b.(time.Duration)
-		return s(x < y, x == y)
-	case time.Time:
-		y := b.(time.Time)
-		return s(x.Before(y), x.Equal(y))
-	default:
-		panic(fmt.Sprintf("BUG: unsupported comparison types %T/%T", a, b))
-	}
-}
-
-// protoUnpackValue unpacks a protobuf reflection value into unreflected
-// Go values. The given descriptor must be the field descriptor for the value,
-// except if the value is a message, in which case desc may be nil.
-func protoUnpackValue(
-	pDesc protoreflect.FieldDescriptor, pValue protoreflect.Value,
-) interface{} {
-	switch x := pValue.Interface().(type) {
-	case protoreflect.Message:
-		switch x.Descriptor().FullName() {
-		case durationName:
-			return x.Interface().(*durationpb.Duration).AsDuration()
-		case timestampName:
-			return x.Interface().(*timestamppb.Timestamp).AsTime()
-		default:
-			return x.Interface()
+		return protoreflect.Value{},
+			fmt.Errorf("expected proto.Message, got %T", goval)
+	case fd.Kind() == protoreflect.EnumKind:
+		enumType, err := getProtoType(Value_ENUM, string(fd.Enum().FullName()))
+		if err != nil {
+			return protoreflect.Value{}, err
 		}
-	case protoreflect.List:
-		typ := reflect.TypeOf(protoUnpackValue(pDesc, x.NewElement()))
-		result := reflect.MakeSlice(reflect.SliceOf(typ), 0, x.Len())
-		for i := 0; i < x.Len(); i++ {
-			result = reflect.Append(result,
-				reflect.ValueOf(protoUnpackValue(pDesc, x.Get(i))))
+		if !value.Type().ConvertibleTo(enumType) {
+			return protoreflect.Value{}, fmt.Errorf(
+				"value type %T not convertible to enum number %s", goval, enumType)
 		}
-		return result.Interface()
-	case protoreflect.Map:
-		keyDesc := pDesc.MapKey()
-		valueDesc := pDesc.MapValue()
-		keyType, _ := getProtoMapKeyType(Value_Kind(keyDesc.Kind()))
-		valueType := reflect.TypeOf(protoUnpackValue(valueDesc, x.NewValue()))
-		result := reflect.MakeMapWithSize(
-			reflect.MapOf(keyType, valueType), x.Len())
-		x.Range(func(key protoreflect.MapKey, value protoreflect.Value) bool {
-			result.SetMapIndex(
-				reflect.ValueOf(protoUnpackValue(keyDesc, key.Value())),
-				reflect.ValueOf(protoUnpackValue(valueDesc, value)),
-			)
-			return true
-		})
-		return result.Interface()
-	case protoreflect.EnumNumber:
-		return pDesc.Enum().Values().ByNumber(x)
+		return protoreflect.ValueOf(value.Convert(enumType).Interface()), nil
 	default:
-		return pValue.Interface()
+		targetType := reflect.TypeOf(msg.NewField(fd).Interface())
+		if !value.Type().ConvertibleTo(targetType) {
+			return protoreflect.Value{},
+				fmt.Errorf("value type %T not convertible to %s", goval, targetType)
+		}
+		return protoreflect.ValueOf(value.Convert(targetType).Interface()), nil
 	}
 }

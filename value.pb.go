@@ -1154,20 +1154,20 @@ func (*Value_Enum_Number) isValue_Enum_By() {}
 func (*Value_Enum_Name) isValue_Enum_By() {}
 
 // List describes a list value.
+// If both kind and type are omitted, the resulting list is a heterogeneous
+// CEL list. If kind is omitted but type is not, kind is assumed to be
+// MESSAGE. If kind is ENUM or MESSAGE, type must not be omitted.
 type Value_List struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
 	// kind is the kind of the value type of the list.
-	// Can be omitted for non-empty lists, otherwise required.
 	Kind Value_Kind `protobuf:"varint,1,opt,name=kind,proto3,enum=com.github.thecount.protoeval.Value_Kind" json:"kind,omitempty"`
 	// type is the full name of the value type of the list.
-	// Must be omitted if the type is already fully determined by kind.
-	// Can be omitted for non-empty lists.
 	Type string `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	// values are the values in this List. All values must have the same type,
-	// which must match kind/type if not omitted.
+	// values are the values in this List. Unless the list is a heterogeneous
+	// CEL list, all values must have a type compatible with kind and type.
 	Values []*Value `protobuf:"bytes,3,rep,name=values,proto3" json:"values,omitempty"`
 }
 
@@ -1225,6 +1225,12 @@ func (x *Value_List) GetValues() []*Value {
 }
 
 // Map describes a map value.
+// If key_kind is omitted, all key types allowed for protobuf maps (string,
+// bool, and the integer types) are permitted for keys. If value_kind and
+// value_type are both omitted, the resulting map can have heterogeneous
+// values. If value_kind is omitted but value_type is not, value_kind is
+// assumed to be MESSAGE. If value_kind is ENUM or MESSAGE, value_type
+// must not be omitted.
 type Value_Map struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -1232,18 +1238,15 @@ type Value_Map struct {
 
 	// key_kind is the kind of the key type of the map.
 	// Must be a valid kind for a map key type.
-	// Can be omitted for non-empty maps, otherwise required.
+	// Can be omitted, see above.
 	KeyKind Value_Kind `protobuf:"varint,1,opt,name=key_kind,json=keyKind,proto3,enum=com.github.thecount.protoeval.Value_Kind" json:"key_kind,omitempty"`
 	// value_kind is the kind of the value type of the map.
-	// Can be omitted for non-empty maps, otherwise required.
 	ValueKind Value_Kind `protobuf:"varint,2,opt,name=value_kind,json=valueKind,proto3,enum=com.github.thecount.protoeval.Value_Kind" json:"value_kind,omitempty"`
 	// value_type is the full name of the value type of the map.
-	// Must be omitted if the type is already fully determined by value_kind.
-	// Can be omitted for non-empty maps.
 	ValueType string `protobuf:"bytes,3,opt,name=value_type,json=valueType,proto3" json:"value_type,omitempty"`
 	// entries is the list of map entries. The keys must be mutually distinct.
 	// Keys and values must match the types determined by
-	// key_kind/value_kind/value_type if not omitted.
+	// key_kind/value_kind/value_type as described above.
 	Entries []*Value_Map_Entry `protobuf:"bytes,4,rep,name=entries,proto3" json:"entries,omitempty"`
 }
 

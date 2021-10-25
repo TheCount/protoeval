@@ -46,9 +46,9 @@ func TestFieldScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("eval: %s", err)
 	}
-	scalar, ok := result.(int32)
+	scalar, ok := result.(int64) // cel type
 	if !ok {
-		t.Fatalf("result type %T is not int32", result)
+		t.Fatalf("result type %T is not int64", result)
 	}
 	if scalar != 42 {
 		t.Errorf("expected 42, got %d", scalar)
@@ -92,9 +92,9 @@ func TestStringMapScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("eval: %s", err)
 	}
-	scalar, ok := result.(int32)
+	scalar, ok := result.(int64) // cel type
 	if !ok {
-		t.Fatalf("result type %T is not int32", result)
+		t.Fatalf("result type %T is not int64", result)
 	}
 	if scalar != 42 {
 		t.Errorf("expected 42, got %d", scalar)
@@ -138,9 +138,9 @@ func TestBoolMapScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("eval: %s", err)
 	}
-	scalar, ok := result.(int32)
+	scalar, ok := result.(int64) // cel type
 	if !ok {
-		t.Fatalf("result type %T is not int32", result)
+		t.Fatalf("result type %T is not int64", result)
 	}
 	if scalar != 42 {
 		t.Errorf("expected 42, got %d", scalar)

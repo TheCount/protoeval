@@ -1,17 +1,33 @@
 package protoeval
 
+import (
+	"reflect"
+
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
+)
+
 const (
 	// DefaultEvalMax is the default maximum number of sub-evaluations before
 	// a call to Eval is aborted.
 	DefaultEvalMax = 1000
 )
 
+// envValue describes an environment value.
+type envValue struct {
+	// origType is the original type of the value as supplied to the user.
+	origType reflect.Type
+
+	// value is the value in CEL format.
+	value ref.Val
+}
+
 // Env describes an environment within which an evaluation can take place.
 // Instances of this type are not safe for concurrent use. Clone your
 // environment instead.
 type Env struct {
 	// values is the general value storage for this environment.
-	values map[string]interface{}
+	values map[string]envValue
 
 	// scope is the current scope.
 	scope scope
@@ -25,30 +41,43 @@ type Env struct {
 func NewEnv() *Env {
 	initCelTypeRegistry()
 	return &Env{
-		values:     make(map[string]interface{}),
+		values:     make(map[string]envValue),
 		cyclesLeft: DefaultEvalMax,
 	}
 }
 
 // Set sets a value in this environment under the given key. If there already
 // is a value, it is overwritten. If value is nil, it is deleted instead.
-// This environment is returned
-// FIXME: not all value types can be sensibly used in all contexts, should
-// specify this further.
-func (e *Env) Set(key string, value interface{}) *Env {
+// If the value cannot be converted to a proper CEL value, an error is returned.
+func (e *Env) Set(key string, value interface{}) error {
 	if value == nil {
 		delete(e.values, key)
-		return e
+		return nil
 	}
-	e.values[key] = value
-	return e
+	val := celTypeRegistry.NativeToValue(value)
+	if types.IsError(val) {
+		return val.Value().(error)
+	}
+	e.values[key] = envValue{
+		origType: reflect.TypeOf(value),
+		value:    val,
+	}
+	return nil
 }
 
 // Get gets a value from this environment for the given key. If no such value
 // exists, ok == false is returned.
 func (e *Env) Get(key string) (value interface{}, ok bool) {
-	value, ok = e.values[key]
-	return
+	envValue, ok := e.values[key]
+	if !ok {
+		return nil, false
+	}
+	value, err := envValue.value.ConvertToNative(envValue.origType)
+	if err != nil {
+		// This should not happen since we obtained Val with NativeToValue.
+		panic(err)
+	}
+	return value, true
 }
 
 // SetEvalMax sets the maximum number of sub-evaluations for an Eval call
@@ -64,7 +93,7 @@ func (e *Env) SetEvalMax(max int) *Env {
 // shallowly.
 func (e *Env) Clone() *Env {
 	result := &Env{
-		values:     make(map[string]interface{}, len(e.values)),
+		values:     make(map[string]envValue, len(e.values)),
 		cyclesLeft: e.cyclesLeft,
 	}
 	for k, v := range e.values {

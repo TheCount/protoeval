@@ -1,11 +1,9 @@
 package protoeval
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"sync"
-	"time"
 
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
@@ -153,23 +151,4 @@ func value2any(value interface{}) (result *anypb.Any, err error) {
 		return nil, fmt.Errorf("convert %T to anypb.Any: %w", value, err)
 	}
 	return result, nil
-}
-
-// cel2go converts the given cel value to a go value.
-func cel2go(v ref.Val) (interface{}, error) {
-	switch x := v.Value().(type) {
-	case bool, []byte, float64, time.Duration, int64, string, time.Time, uint64,
-		proto.Message:
-		return v.Value(), nil
-	case protoreflect.List:
-		// FIXME: cannot convert, descriptor missing
-		return nil, errors.New("cannot convert CEL protoreflect.List to native Go")
-	case protoreflect.Map:
-		// FIXME: cannot convert, descriptor missing
-		return nil, errors.New("cannot convert CEL protoreflect.Map to native Go")
-	case protoreflect.Message:
-		return x.Interface(), nil
-	default:
-		return nil, fmt.Errorf("cel2go: unable to handle type %T", v.Value())
-	}
 }

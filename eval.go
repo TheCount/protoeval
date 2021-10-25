@@ -7,6 +7,8 @@ import (
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
+	"github.com/google/cel-go/common/types"
+	"github.com/google/cel-go/common/types/ref"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -66,11 +68,21 @@ func Eval(env *Env, msg proto.Message, value *Value) (interface{}, error) {
 	rmsg := msg.ProtoReflect()
 	env.scope.Init(rmsg)
 	cyclesLeft := env.cyclesLeft
-	return eval(env, &cyclesLeft, value)
+	result, err := eval(env, &cyclesLeft, value)
+	if err != nil {
+		return nil, err
+	}
+	if types.IsError(result) {
+		return nil, fmt.Errorf("evaluation error: %w", result.Value().(error))
+	}
+	if result.Type() == types.NullType {
+		return nil, nil
+	}
+	return result.Value(), nil
 }
 
 // eval recursively evaluates msg in the given environment based on value.
-func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
+func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 	if *cyclesLeft <= 0 {
 		return nil, ErrEvalTooLong
 	}
@@ -111,19 +123,19 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 	case *Value_Default:
 		return env.scope.DefaultValue(), nil
 	case *Value_Nil:
-		return nil, nil
+		return types.NullValue, nil
 	case *Value_Bool:
-		return x.Bool, nil
+		return types.Bool(x.Bool), nil
 	case *Value_Int:
-		return x.Int, nil
+		return types.Int(x.Int), nil
 	case *Value_Uint:
-		return x.Uint, nil
+		return types.Uint(x.Uint), nil
 	case *Value_Double:
-		return x.Double, nil
+		return types.Double(x.Double), nil
 	case *Value_String_:
-		return x.String_, nil
+		return types.String(x.String_), nil
 	case *Value_Bytes:
-		return x.Bytes, nil
+		return types.Bytes(x.Bytes), nil
 	case *Value_Enum_:
 		typeName := protoreflect.FullName(x.Enum.Type)
 		et, err := protoregistry.GlobalTypes.FindEnumByName(typeName)
@@ -131,123 +143,69 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 			return nil, fmt.Errorf("find enum '%s': %w", typeName, err)
 		}
 		descs := et.Descriptor().Values()
-		var desc protoreflect.EnumValueDescriptor
 		switch y := x.Enum.By.(type) {
 		case nil:
 			return nil, errors.New("Value.enum.by not set")
 		case *Value_Enum_Number:
-			desc = descs.ByNumber(protoreflect.EnumNumber(y.Number))
-			if desc == nil {
+			enumNumber := protoreflect.EnumNumber(y.Number)
+			if descs.ByNumber(enumNumber) == nil {
 				return nil, fmt.Errorf("enum %s number %d not found",
 					typeName, y.Number)
 			}
+			return celTypeRegistry.NativeToValue(enumNumber), nil
 		case *Value_Enum_Name:
-			desc = descs.ByName(protoreflect.Name(y.Name))
+			desc := descs.ByName(protoreflect.Name(y.Name))
 			if desc == nil {
 				return nil, fmt.Errorf("enum %s name %s not found", typeName, y.Name)
 			}
+			return celTypeRegistry.NativeToValue(desc.Number()), nil
 		default:
 			panic(fmt.Sprintf("BUG: unsupported enum by type %T", x.Enum.By))
 		}
-		return desc, nil
 	case *Value_List_:
-		typ, err := getProtoType(x.List.Kind, x.List.Type)
+		k, t := x.List.Kind, x.List.Type
+		if k == Value_INVALID && t != "" {
+			k = Value_MESSAGE
+		}
+		typ, err := getProtoType(k, t)
 		if err != nil {
 			return nil, fmt.Errorf("determine protobuf type for '%s'/'%s': %w",
-				x.List.Kind, x.List.Type, err)
+				k, t, err)
 		}
-		startIndex := 0
 		length := len(x.List.Values)
-		var listValue reflect.Value
-		if typ == nil {
-			if length == 0 {
-				return nil, errors.New("type must be specified for empty list")
-			}
-			firstValue, err := eval(env, cyclesLeft, x.List.Values[0])
+		listValue := reflect.MakeSlice(reflect.SliceOf(typ), 0, length)
+		for i := 0; i != length; i++ {
+			val, err := eval(env, cyclesLeft, x.List.Values[i])
 			if err != nil {
-				return firstValue, fmt.Errorf("eval list index 0: %w", err)
+				return val, fmt.Errorf("eval list index %d: %w", i, err)
 			}
-			startIndex = 1
-			typ = reflect.TypeOf(firstValue)
-			listValue = reflect.MakeSlice(reflect.SliceOf(typ), 0, length)
-			listValue = reflect.Append(listValue, reflect.ValueOf(firstValue))
-		} else {
-			listValue = reflect.MakeSlice(reflect.SliceOf(typ), 0, length)
+			item := reflect.ValueOf(val.Value())
+			if item.Type().ConvertibleTo(typ) {
+				listValue = reflect.Append(listValue, item.Convert(typ))
+			} else {
+				return val, fmt.Errorf("cannot convert %T to %s", val.Value(), typ)
+			}
 		}
-		for i := startIndex; i < length; i++ {
-			value, err := eval(env, cyclesLeft, x.List.Values[i])
-			if err != nil {
-				return value, fmt.Errorf("eval list index %d: %w", i, err)
-			}
-			if reflect.TypeOf(value) != typ {
-				return nil, fmt.Errorf(
-					"eval list index %d: expected type '%s', got '%T'", i, typ, value)
-			}
-			listValue = reflect.Append(listValue, reflect.ValueOf(value))
-		}
-		return listValue.Interface(), nil
+		return types.NewDynamicList(celTypeRegistry, listValue.Interface()), nil
 	case *Value_Map_:
 		keyType, err := getProtoMapKeyType(x.Map.KeyKind)
 		if err != nil {
 			return nil, fmt.Errorf("determine protobuf map key type for '%s': %w",
 				x.Map.KeyKind, err)
 		}
-		valueType, err := getProtoType(x.Map.ValueKind, x.Map.ValueType)
+		k, t := x.Map.ValueKind, x.Map.ValueType
+		if k == Value_INVALID && t != "" {
+			k = Value_MESSAGE
+		}
+		valueType, err := getProtoType(k, t)
 		if err != nil {
 			return nil, fmt.Errorf(
-				"determine protobuf map value type for '%s'/'%s': %w",
-				x.Map.ValueKind, x.Map.ValueType, err)
+				"determine protobuf map value type for '%s'/'%s': %w", k, t, err)
 		}
-		startIndex := 0
 		length := len(x.Map.Entries)
-		var mapValue reflect.Value
-		if keyType == nil || valueType == nil {
-			if length == 0 {
-				return nil, errors.New(
-					"both key and value type must be specified for empty map")
-			}
-			firstEntry := x.Map.Entries[0]
-			if firstEntry.Key == nil {
-				return nil, errors.New("map entry 0 key missing")
-			}
-			if firstEntry.Value == nil {
-				return nil, errors.New("map entry 0 value missing")
-			}
-			firstKey, err := eval(env, cyclesLeft, firstEntry.Key)
-			if err != nil {
-				return firstKey, fmt.Errorf("eval map entry 0 key: %w", err)
-			}
-			firstValue, err := eval(env, cyclesLeft, firstEntry.Value)
-			if err != nil {
-				return firstValue, fmt.Errorf("eval map entry 0 value: %w", err)
-			}
-			startIndex = 1
-			if keyType == nil {
-				keyType = reflect.TypeOf(firstKey)
-				if !isValidMapKeyType(keyType) {
-					return nil, fmt.Errorf("invalid map key type: %s", keyType)
-				}
-			} else if reflect.TypeOf(firstKey) != keyType {
-				return nil, fmt.Errorf(
-					"eval map entry 0 key: expected type '%s', got '%T'",
-					keyType, firstKey)
-			}
-			if valueType == nil {
-				valueType = reflect.TypeOf(firstValue)
-			} else if reflect.TypeOf(firstValue) != valueType {
-				return nil, fmt.Errorf(
-					"eval map entry 0 value: expected type '%s', got '%T'",
-					valueType, firstValue)
-			}
-			mapValue = reflect.MakeMapWithSize(
-				reflect.MapOf(keyType, valueType), length)
-			mapValue.SetMapIndex(
-				reflect.ValueOf(firstKey), reflect.ValueOf(firstValue))
-		} else {
-			mapValue = reflect.MakeMapWithSize(
-				reflect.MapOf(keyType, valueType), length)
-		}
-		for i := startIndex; i < length; i++ {
+		mapValue := reflect.MakeMapWithSize(
+			reflect.MapOf(keyType, valueType), length)
+		for i := 0; i != length; i++ {
 			entry := x.Map.Entries[i]
 			if entry.Key == nil {
 				return nil, fmt.Errorf("map entry %d key missing", i)
@@ -255,31 +213,34 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 			if entry.Value == nil {
 				return nil, fmt.Errorf("map entry %d value missing", i)
 			}
-			key, err := eval(env, cyclesLeft, entry.Key)
+			keyVal, err := eval(env, cyclesLeft, entry.Key)
 			if err != nil {
-				return key, fmt.Errorf("eval map entry %d key: %w", i, err)
+				return keyVal, fmt.Errorf("eval map entry %d key: %w", i, err)
 			}
-			keyValue := reflect.ValueOf(key)
-			if keyValue.Type() != keyType {
-				return nil, fmt.Errorf(
-					"eval map entry %d key: expected type '%s', got '%T'",
-					i, keyType, key)
+			keyItem := reflect.ValueOf(keyVal.Value())
+			if !keyItem.Type().ConvertibleTo(keyType) {
+				return nil, fmt.Errorf("cannot convert map entry %d key type %T to %s",
+					i, keyVal.Value(), keyType)
 			}
-			if mapValue.MapIndex(keyValue).IsValid() {
-				return nil, fmt.Errorf("duplicate map entry %d key: %v", i, key)
+			convertedKey := keyItem.Convert(keyType)
+			if mapValue.MapIndex(convertedKey).IsValid() {
+				return nil, fmt.Errorf("duplicate map entry %d key: %v",
+					i, keyVal.Value())
 			}
-			value, err := eval(env, cyclesLeft, entry.Value)
+			valueVal, err := eval(env, cyclesLeft, entry.Value)
 			if err != nil {
-				return value, fmt.Errorf("eval map entry %d value: %w", i, err)
+				return valueVal, fmt.Errorf("eval map entry %d value: %w", i, err)
 			}
-			if reflect.TypeOf(value) != valueType {
+			valueItem := reflect.ValueOf(valueVal.Value())
+			if !valueItem.Type().ConvertibleTo(valueType) {
 				return nil, fmt.Errorf(
-					"eval map entry %d value: expected type '%s', got '%T'",
-					i, valueType, value)
+					"cannot convert map entry %d value type %T to %s",
+					i, valueVal.Value(), valueType)
 			}
-			mapValue.SetMapIndex(keyValue, reflect.ValueOf(value))
+			convertedValue := valueItem.Convert(valueType)
+			mapValue.SetMapIndex(convertedKey, convertedValue)
 		}
-		return mapValue.Interface(), nil
+		return types.NewDynamicMap(celTypeRegistry, mapValue.Interface()), nil
 	case *Value_Message_:
 		msgName := protoreflect.FullName(x.Message.Type)
 		msgType, err := protoregistry.GlobalTypes.FindMessageByName(msgName)
@@ -306,54 +267,26 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 			if err != nil {
 				return rv, fmt.Errorf("eval message field '%s': %w", key, err)
 			}
-			// enum needs special care
-			if evd, ok := rv.(protoreflect.EnumValueDescriptor); ok {
-				dvd := fd.DefaultEnumValue()
-				if dvd == nil {
-					return nil, fmt.Errorf("message field '%s' is not an enum", key)
-				}
-				if dvd.Parent().FullName() != evd.Parent().FullName() {
-					return nil, fmt.Errorf("bad enum number '%s' for enum '%s'",
-						evd.FullName(), dvd.Parent().FullName())
-				}
-				rv = evd.Number()
-			}
-			func() {
-				defer func() {
-					if r := recover(); r != nil {
-						err = fmt.Errorf("message field '%s' value type %T: %v",
-							msgName, rv, r)
-					}
-				}()
-				result.Set(fd, protoreflect.ValueOf(rv))
-			}()
+			fieldValue, err := go2protofd(rv.Value(), result, fd)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("convert %T to field '%s' value: %w",
+					rv.Value(), key, err)
 			}
+			result.Set(fd, fieldValue)
 		}
-		return result.Interface(), nil
+		return celTypeRegistry.NativeToValue(result.Interface()), nil
 	case *Value_BasicMessage:
-		result, err := x.BasicMessage.UnmarshalNew()
-		if err != nil {
-			return nil, fmt.Errorf("unmarshal basic message: %w", err)
-		}
-		return result, nil
+		return celTypeRegistry.NativeToValue(x.BasicMessage), nil
 	case *Value_Duration:
-		if err := x.Duration.CheckValid(); err != nil {
-			return nil, fmt.Errorf("duration: %w", err)
-		}
-		return x.Duration.AsDuration(), nil
+		return celTypeRegistry.NativeToValue(x.Duration), nil
 	case *Value_Timestamp:
-		if err := x.Timestamp.CheckValid(); err != nil {
-			return nil, fmt.Errorf("timestamp: %w", err)
-		}
-		return x.Timestamp.AsTime(), nil
+		return celTypeRegistry.NativeToValue(x.Timestamp), nil
 	case *Value_Not:
 		rv, err := eval(env, cyclesLeft, x.Not)
 		if err != nil {
 			return rv, fmt.Errorf("eval not: %w", err)
 		}
-		if bv, ok := rv.(bool); ok {
+		if bv, ok := rv.(types.Bool); ok {
 			return !bv, nil
 		}
 		return nil, fmt.Errorf("eval not: expected bool, got %T", rv)
@@ -363,84 +296,76 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 			if err != nil {
 				return rv, fmt.Errorf("eval all_of index %d: %w", i, err)
 			}
-			if bv, ok := rv.(bool); ok {
+			if bv, ok := rv.(types.Bool); ok {
 				if !bv {
-					return false, nil
+					return types.False, nil
 				}
 				continue
 			}
 			return nil, fmt.Errorf("eval all_of index %d: expected bool, got %T",
 				i, rv)
 		}
-		return true, nil
+		return types.True, nil
 	case *Value_AnyOf:
 		for i, value := range x.AnyOf.Values {
 			rv, err := eval(env, cyclesLeft, value)
 			if err != nil {
 				return rv, fmt.Errorf("eval any_of index %d: %w", i, err)
 			}
-			if bv, ok := rv.(bool); ok {
+			if bv, ok := rv.(types.Bool); ok {
 				if bv {
-					return true, nil
+					return types.True, nil
 				}
 				continue
 			}
 			return nil, fmt.Errorf("eval any_of index %d: expected bool, got %T",
 				i, rv)
 		}
-		return false, nil
+		return types.False, nil
 	case *Value_Eq:
 		if len(x.Eq.Values) == 0 {
-			return true, nil
+			return types.True, nil
 		}
 		firstValue, err := eval(env, cyclesLeft, x.Eq.Values[0])
 		if err != nil {
 			return firstValue, fmt.Errorf("eval eq index 0: %w", err)
 		}
-		typ := reflect.TypeOf(firstValue)
 		for i := 1; i < len(x.Eq.Values); i++ {
 			value, err := eval(env, cyclesLeft, x.Eq.Values[i])
 			if err != nil {
 				return value, fmt.Errorf("eval eq index %d: %w", i, err)
 			}
-			if reflect.TypeOf(value) != typ {
-				return nil, fmt.Errorf("eval eq index %d: expected type '%s', got %T",
-					i, typ, value)
-			}
-			if !protoEqual(firstValue, value) {
-				return false, nil
+			check := firstValue.Equal(value)
+			if check != types.True {
+				return check, nil
 			}
 		}
-		return true, nil
+		return types.True, nil
 	case *Value_Neq:
 		if len(x.Neq.Values) == 0 {
-			return true, nil
+			return types.True, nil
 		}
-		values := make([]interface{}, len(x.Neq.Values))
+		values := make([]ref.Val, len(x.Neq.Values))
 		var err error
 		values[0], err = eval(env, cyclesLeft, x.Neq.Values[0])
 		if err != nil {
 			return values[0], fmt.Errorf("eval neq index 0: %w", err)
 		}
-		typ := reflect.TypeOf(values[0])
 		for i := 1; i < len(x.Neq.Values); i++ {
 			values[i], err = eval(env, cyclesLeft, x.Neq.Values[i])
 			if err != nil {
 				return values[i], fmt.Errorf("eval neq index %d: %w", i, err)
 			}
-			if reflect.TypeOf(values[i]) != typ {
-				return nil, fmt.Errorf("eval neq index %d: expected type '%s', got %T",
-					i, typ, values[i])
-			}
 			for j := 0; j < i; j++ {
-				if protoEqual(values[j], values[i]) {
-					return false, nil
+				check := values[j].Equal(values[i])
+				if check != types.False {
+					return check, nil
 				}
 			}
 		}
-		return true, nil
+		return types.True, nil
 	case *Value_Seq:
-		var result interface{}
+		var result ref.Val
 		for _, value := range x.Seq.Values {
 			rv, err := eval(env, cyclesLeft, value)
 			switch err.(type) {
@@ -466,7 +391,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 				return cond, fmt.Errorf("eval switch case index %d condition: %w",
 					i, err)
 			}
-			if bv, ok := cond.(bool); !ok {
+			if bv, ok := cond.(types.Bool); !ok {
 				return nil, fmt.Errorf(
 					"eval switch case index %d condition: expected bool, got %T", i, cond)
 			} else if !bv {
@@ -479,7 +404,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 			return value, nil
 		}
 		if x.Switch.Default == nil {
-			return nil, nil
+			return types.NullValue, nil
 		}
 		value, err := eval(env, cyclesLeft, x.Switch.Default)
 		if err != nil {
@@ -493,14 +418,14 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		if x.While.Then == nil {
 			return nil, errors.New("while body missing")
 		}
-		var lastValue interface{}
+		var lastValue ref.Val
 		for {
 			cond, err := eval(env, cyclesLeft, x.While.Case)
 			if err != nil {
 				return cond, fmt.Errorf("eval while condition: %w", err)
 			}
-			if bv, ok := cond.(bool); !ok {
-				return nil, fmt.Errorf("eval while condition: expected bool, got %d",
+			if bv, ok := cond.(types.Bool); !ok {
+				return nil, fmt.Errorf("eval while condition: expected bool, got %T",
 					cond)
 			} else if !bv {
 				return lastValue, nil
@@ -549,27 +474,32 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		if err != nil {
 			return value, fmt.Errorf("eval store: %w", err)
 		}
-		env.values[x.Store.Key] = value
+		env.values[x.Store.Key] = envValue{
+			origType: reflect.TypeOf(value.Value()),
+			value:    value,
+		}
 		return value, nil
 	case *Value_Proc:
 		if x.Proc.Value == nil {
 			return nil, errors.New("proc value missing")
 		}
-		env.values[x.Proc.Key] = x.Proc.Value
-		return nil, nil
-	case *Value_Load:
-		value := env.values[x.Load]
-		if value == nil {
-			return nil, nil
+		env.values[x.Proc.Key] = envValue{
+			origType: reflect.TypeOf((*Value)(nil)),
+			value:    celTypeRegistry.NativeToValue(x.Proc.Value),
 		}
-		var err error
-		if proc, ok := value.(*Value); ok {
-			value, err = eval(env, cyclesLeft, proc)
+		return types.NullValue, nil
+	case *Value_Load:
+		envValue, ok := env.values[x.Load]
+		if !ok {
+			return types.NullValue, nil
+		}
+		if proc, ok := envValue.value.Value().(*Value); ok {
+			value, err := eval(env, cyclesLeft, proc)
 			if err != nil {
 				return value, fmt.Errorf("eval loaded proc: %w", err)
 			}
 		}
-		return value, nil
+		return envValue.value, nil
 	case *Value_Program:
 		celEnv, err := cel.NewEnv(
 			cel.CustomTypeAdapter(celTypeRegistry),
@@ -601,15 +531,11 @@ func eval(env *Env, cyclesLeft *int, value *Value) (interface{}, error) {
 		if err != nil {
 			return nil, fmt.Errorf("evaluate CEL program: %w", err)
 		}
-		result, err := cel2go(out)
-		if err != nil {
-			return nil, fmt.Errorf("CEL program output: %w", err)
-		}
-		return result, nil
+		return out, nil
 	case *Value_ScopeIs:
-		return env.scope.Matches(protoreflect.FullName(x.ScopeIs)), nil
+		return types.Bool(env.scope.Matches(protoreflect.FullName(x.ScopeIs))), nil
 	case *Value_ScopeHas:
-		return env.scope.Has(x.ScopeHas), nil
+		return types.Bool(env.scope.Has(x.ScopeHas)), nil
 	default:
 		panic(fmt.Sprintf("BUG: unsupported value type %T", value.Value))
 	}

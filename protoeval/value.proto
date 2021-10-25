@@ -328,22 +328,28 @@ message Value {
   }
 
   // List describes a list value.
+  // If both kind and type are omitted, the resulting list is a heterogeneous
+  // CEL list. If kind is omitted but type is not, kind is assumed to be
+  // MESSAGE. If kind is ENUM or MESSAGE, type must not be omitted.
   message List {
     // kind is the kind of the value type of the list.
-    // Can be omitted for non-empty lists, otherwise required.
     Kind kind = 1;
 
     // type is the full name of the value type of the list.
-    // Must be omitted if the type is already fully determined by kind.
-    // Can be omitted for non-empty lists.
     string type = 2;
 
-    // values are the values in this List. All values must have the same type,
-    // which must match kind/type if not omitted.
+    // values are the values in this List. Unless the list is a heterogeneous
+    // CEL list, all values must have a type compatible with kind and type.
     repeated Value values = 3;
   }
 
   // Map describes a map value.
+  // If key_kind is omitted, all key types allowed for protobuf maps (string,
+  // bool, and the integer types) are permitted for keys. If value_kind and
+  // value_type are both omitted, the resulting map can have heterogeneous
+  // values. If value_kind is omitted but value_type is not, value_kind is
+  // assumed to be MESSAGE. If value_kind is ENUM or MESSAGE, value_type
+  // must not be omitted.
   message Map {
     // Entry describes a map entry.
     message Entry {
@@ -356,21 +362,18 @@ message Value {
 
     // key_kind is the kind of the key type of the map.
     // Must be a valid kind for a map key type.
-    // Can be omitted for non-empty maps, otherwise required.
+    // Can be omitted, see above.
     Kind key_kind = 1;
 
     // value_kind is the kind of the value type of the map.
-    // Can be omitted for non-empty maps, otherwise required.
     Kind value_kind = 2;
 
     // value_type is the full name of the value type of the map.
-    // Must be omitted if the type is already fully determined by value_kind.
-    // Can be omitted for non-empty maps.
     string value_type = 3;
 
     // entries is the list of map entries. The keys must be mutually distinct.
     // Keys and values must match the types determined by
-    // key_kind/value_kind/value_type if not omitted.
+    // key_kind/value_kind/value_type as described above.
     repeated Entry entries = 4;
   }
 

@@ -4,9 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"reflect"
-	"time"
 
+	"github.com/google/cel-go/common/types/ref"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
@@ -241,33 +240,20 @@ func (s *scope) ShiftByIntKey(key int64) (scope, error) {
 }
 
 // Value returns the value of this scope.
-func (s *scope) Value() interface{} {
-	return protoUnpackValue(s.desc, s.value)
+func (s *scope) Value() ref.Val {
+	return celTypeRegistry.NativeToValue(s.value.Interface())
 }
 
 // Value returns the default value of this scope.
-func (s *scope) DefaultValue() interface{} {
+func (s *scope) DefaultValue() ref.Val {
 	switch x := s.value.Interface().(type) {
-	case protoreflect.EnumNumber:
-		return s.desc.DefaultEnumValue()
-	case protoreflect.Message:
-		switch x.Descriptor().FullName() {
-		case durationName:
-			return time.Duration(0)
-		case timestampName:
-			return time.Time{}
-		default:
-			return x.Type().New().Interface()
-		}
-	case protoreflect.List:
-		typ := reflect.TypeOf(protoUnpackValue(s.desc, x.NewElement()))
-		return reflect.MakeSlice(reflect.SliceOf(typ), 0, 0).Interface()
-	case protoreflect.Map:
-		keyType, _ := getProtoMapKeyType(Value_Kind(s.desc.MapKey().Kind()))
-		valueType := reflect.TypeOf(protoUnpackValue(s.desc, x.NewValue()))
-		return reflect.MakeMap(reflect.MapOf(keyType, valueType)).Interface()
+	case protoreflect.Message: // s.parent and s.desc may be nil in this case
+		return celTypeRegistry.NativeToValue(x.Type().New())
+	case protoreflect.List, protoreflect.Map:
+		return celTypeRegistry.NativeToValue(
+			s.parent.value.Message().NewField(s.desc).Interface())
 	default:
-		return s.desc.Default().Interface()
+		return celTypeRegistry.NativeToValue(s.desc.Default().Interface())
 	}
 }
 
