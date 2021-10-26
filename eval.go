@@ -533,6 +533,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				decls.NewVar("scope",
 					decls.NewObjectType("com.github.thecount.protoeval.Scope"),
 				),
+				decls.NewVar("args", decls.NewListType(decls.Dyn)),
 			),
 		)
 		if err != nil {
@@ -552,6 +553,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		}
 		out, _, err := prg.Eval(map[string]interface{}{
 			"scope": celScope,
+			"args":  (*celArgList)(&env.scope),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("evaluate CEL program: %w", err)
