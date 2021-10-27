@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	reflect "reflect"
+	"strings"
 
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/checker/decls"
@@ -525,7 +526,16 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			}
 		}
 		return envValue.value, nil
-	case *Value_Program:
+	case *Value_Program_:
+		code := x.Program.Code
+		if code == "" {
+			code = strings.Join(x.Program.Lines, "\n")
+			if code == "" {
+				return nil, errors.New("no code in program")
+			}
+		} else if len(x.Program.Lines) != 0 {
+			return nil, errors.New("lines must not be set if code is non-empty")
+		}
 		celEnv, err := cel.NewEnv(
 			cel.CustomTypeAdapter(celTypeRegistry),
 			cel.CustomTypeProvider(celTypeRegistry),
@@ -539,7 +549,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		if err != nil {
 			return nil, fmt.Errorf("build CEL environment: %w", err)
 		}
-		ast, iss := celEnv.Compile(x.Program)
+		ast, iss := celEnv.Compile(code)
 		if iss.Err() != nil {
 			return nil, fmt.Errorf("compile CEL program source: %w", iss.Err())
 		}

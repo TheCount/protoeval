@@ -11,8 +11,10 @@ func TestProgram(t *testing.T) {
 	}
 	env := NewEnv()
 	result, err := Eval(env, testmsg, &Value{
-		Value: &Value_Program{
-			Program: "scope.value.a_scalar",
+		Value: &Value_Program_{
+			Program: &Value_Program{
+				Code: "scope.value.a_scalar",
+			},
 		},
 	})
 	if err != nil {

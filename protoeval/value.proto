@@ -226,7 +226,7 @@ message Value {
     string load = 39;
 
     // program is a user defined program to determine the value.
-    string program = 40;
+    Program program = 40;
 
     // scope_is yields a boolean value and is true if and only if the
     // given string matches a *full* field or type name (e. g.,
@@ -428,6 +428,20 @@ message Value {
     // fields describes the message fields. The types of the values must match
     // the message field types.
     map<string, Value> fields = 2;
+  }
+
+  // Program describes a CEL program.
+  message Program {
+    // code is the program code, unless lines is used.
+    // If lines is used, code must be empty.
+    string code = 1;
+
+    // lines are the lines of code. The program code is derived from the lines
+    // by concatenating them with newline characters between them. This is
+    // a convenience feature for protobuf representations which don't have
+    // easily human readable multiline strings (namely JSON).
+    // If code is used, lines must be empty.
+    repeated string lines = 2;
   }
 
   // StoredValue describes a value stored in the environment.
