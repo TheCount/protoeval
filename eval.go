@@ -578,7 +578,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				if err != nil {
 					return rv, fmt.Errorf("eval list range element %d: %w", i, err)
 				}
-				if rv != types.True {
+				if rv != types.NullValue {
 					return rv, nil
 				}
 			}
@@ -597,7 +597,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				if err != nil {
 					return rv, fmt.Errorf("eval map range key %v: %w", key.Value(), err)
 				}
-				if rv != types.True {
+				if rv != types.NullValue {
 					return rv, nil
 				}
 			}

@@ -905,8 +905,9 @@ type Value_ScopeRange struct {
 	// A list will be evaluated in order. The evaluation order for a map is
 	// unspecified.
 	//
-	// If an evaluation yields a value other than boolean true, evaluation
-	// stops early and scope_range yields that value.
+	// If an evaluation yields a value other than nil, evaluation
+	// stops early and scope_range yields that value. Otherwise, scope_range
+	// yields nil.
 	ScopeRange *Value `protobuf:"bytes,43,opt,name=scope_range,json=scopeRange,proto3,oneof"`
 }
 
