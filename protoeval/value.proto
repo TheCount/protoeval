@@ -228,41 +228,6 @@ message Value {
     // program is a user defined program to determine the value.
     Program program = 40;
 
-    // scope_is yields a boolean value and is true if and only if the
-    // given string matches a *full* field or type name (e. g.,
-    // google.protobuf.Timestamp but not Timestamp alone),
-    // as defined below (more than one can apply):
-    //
-    // If the scope value is a message, the message type name.
-    //
-    // If the scope value is a map, the type name of the synthetic message
-    // type generated to represent the map. See
-    // https://developers.google.com/protocol-buffers/docs/proto3#backwards_compatibility
-    // for details.
-    //
-    // If the scope value is an enum number, both the enum name and
-    // the enum value name.
-    //
-    // If the scope is not the root scope, the field name.
-    // Lists and list elements share the same field name (of a repeated field).
-    // Remember that map values use a synthetic field name, see
-    // https://developers.google.com/protocol-buffers/docs/proto3#backwards_compatibility.
-    string scope_is = 41;
-
-    // scope_has yields a boolean value and this value is true if and only if
-    // one of the following conditions holds:
-    //
-    // 1. The scope value is a message, has a field with the specified name, and
-    // the field is set. Fields that cannot distinguish being unset from a
-    // zero value are always considered set.
-    //
-    // 2. The scope value is a message, has a oneof with the specified name, and
-    // one of the oneof fields is set.
-    //
-    // 3. The scope value is a map with string keys, and the map has a value
-    // under the given key.
-    string scope_has = 42;
-
     // scope_range ranges over the iterable scope value, evaluating the Value
     // for each element. It is an error if the current scope value is not an
     // aggregate, i. e., not a list or a map.
@@ -278,7 +243,7 @@ message Value {
     // If an evaluation yields a value other than nil, evaluation
     // stops early and scope_range yields that value. Otherwise, scope_range
     // yields nil.
-    Value scope_range = 43;
+    Value scope_range = 41;
   }
 
   // Branch describes a conditional branch.

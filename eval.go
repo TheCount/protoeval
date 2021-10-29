@@ -569,10 +569,6 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			return nil, fmt.Errorf("evaluate CEL program: %w", err)
 		}
 		return out, nil
-	case *Value_ScopeIs:
-		return types.Bool(env.scope.Matches(protoreflect.FullName(x.ScopeIs))), nil
-	case *Value_ScopeHas:
-		return types.Bool(env.scope.Has(x.ScopeHas)), nil
 	case *Value_ScopeRange:
 		sv := env.scope.Value()
 		switch y := sv.(type) {
