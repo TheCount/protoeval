@@ -9,6 +9,7 @@ import "google/protobuf/any.proto";
 import "google/protobuf/descriptor.proto";
 import "google/protobuf/duration.proto";
 import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
 // Value describes how to arrive at a value given an environment and a scope.
@@ -30,130 +31,88 @@ message Value {
   // of args is n, the previous 0-th argument becomes the n-th argument.
   // Optional.
   //
-  // The args field is applied after the drop_args field and the scope
-  // oneof. The arguments are available in the resulting scope and all
-  // subscopes.
+  // The args field is applied after the drop_args and the scope fields.
+  // The arguments are available in the resulting scope and all subscopes.
   repeated Value args = 2;
 
-  // scope changes the scope relative to the current scope. If omitted, the
-  // current scope remains unchanged.
-  oneof scope {
-    // same forces the creation of a new scope identical to its parent scope.
-    // This can be useful in combination with argument handling.
-    google.protobuf.Empty same = 3;
-
-    // name selects a new scope based on the given name.
-    //
-    // If the current scope is of message kind with non-repeated cardinality,
-    // the scope is shifted to the field of the given name. It is an error if
-    // no such field exists.
-    //
-    // If the current scope is a map and the map key kind is string,
-    // the scope is shifted to the map value for the given name as key. It is an
-    // error if no such map entry exists.
-    //
-    // In all other cases, use of name is an error.
-    string name = 4;
-
-    // index selects a new scope based on the given index.
-    //
-    // If the current scope is a list, the scope is shifted to the list entry
-    // with the given index. It is an error if the index is out of bounds.
-    //
-    // In all other cases, use of index is an error.
-    uint32 index = 5;
-
-    // bool_key selects a new scope based on the given boolean key.
-    //
-    // If the current scope is a map and the map key kind is bool,
-    // the scope is shifted to the map value for the given bool_key. It is an
-    // error if no such map entry exists.
-    //
-    // In all other cases, use of bool_key is an error.
-    bool bool_key = 6;
-
-    // uint_key selects a new scope based on the given unsigned integer key.
-    //
-    // If the current scope is a map and the map key kind is
-    // uint32, uint64, fixed32, or fixed64, the scope is shifted to
-    // the map value for the given uint_key. It is an error if no such map
-    // entry exists.
-    uint64 uint_key = 7;
-
-    // int_key selects a new scope based on the given signed integer key.
-    //
-    // If the current scope is a map and the map key kind is
-    // int32, sint32, int64, sint64, sfixed32, or sfixed64, the scope is
-    // shifted to the map value for the given int_key. It is an error if no
-    // such map entry exists.
-    int64 int_key = 8;
-  }
+  // scope changes the scope relative to the current scope.
+  //
+  // If omitted, the current scope remains unchanged.
+  //
+  // If empty, forces the creation of a new scope identical to its parent scope.
+  // This can be useful in combination with argument handling.
+  //
+  // If non-empty, each element corresponds to a field, list element, or map
+  // entry selection. A string element can select a message field by name or a
+  // map entry (if the map does not have string keys, an attempt at conversion
+  // will be made). A number element can select a message field by field number,
+  // a list entry by index, or a map entry if the map has integer keys. It is an
+  // error if the number is not losslessly convertible to the corresponding
+  // integer type. A bool element can only select a map entry, and the map must
+  // have boolean keys.
+  google.protobuf.ListValue scope = 3;
 
   // value describes the actual value. If omitted, the value will be the
   // scope value.
   oneof value {
     // arg yields the numbered argument.
-    uint32 arg = 9;
-
-    // this is a value based on scope. It can be used to chain multiple scope
-    // shifts.
-    Value this = 10;
+    uint32 arg = 4;
 
     // parent is a value based on the parent scope. It can be used to backtrack
     // from the current scope.
-    Value parent = 11;
+    Value parent = 5;
 
     // default is the default value for the scope.
-    google.protobuf.Empty default = 12;
+    google.protobuf.Empty default = 6;
 
     // nil is an explicit nil value.
-    google.protobuf.Empty nil = 13;
+    google.protobuf.Empty nil = 7;
 
     // bool is an explicit boolean value.
-    bool bool = 14;
+    bool bool = 8;
 
     // int is an explicit signed integer value.
-    int64 int = 15;
+    int64 int = 9;
 
     // uint is an explicit unsigned integer value.
-    uint64 uint = 16;
+    uint64 uint = 10;
 
     // double is an explicit double value.
-    double double = 17;
+    double double = 11;
 
     // string is an explicit string value.
-    string string = 18;
+    string string = 12;
 
     // bytes is an explicit bytes value.
-    bytes bytes = 19;
+    bytes bytes = 13;
 
     // enum is an explicit enum value.
-    Enum enum = 20;
+    Enum enum = 14;
 
     // list is an explicit list value based on scope.
-    List list = 21;
+    List list = 15;
 
     // map is an explicit map value based on scope.
-    Map map = 22;
+    Map map = 16;
 
     // message is an explicit message value based on scope.
-    Message message = 23;
+    Message message = 17;
 
     // basic_message is an explicit message value. It uses the protobuf Any
     // mechanism. While this doesn't allow complex message generation, the
     // specification of the message itself in a configuration file will be
     // less cluttered.
-    google.protobuf.Any basic_message = 24;
+    google.protobuf.Any basic_message = 18;
 
     // duration is an explicit duration.
-    google.protobuf.Duration duration = 25;
+    google.protobuf.Duration duration = 19;
 
     // timestamp is an explicit timestamp.
-    google.protobuf.Timestamp timestamp = 26;
+    google.protobuf.Timestamp timestamp = 20;
 
     // not yields a boolean value which is the inverse of the specified value
     // based on scope. It is an error if the specified value is not boolean.
-    Value not = 27;
+    Value not = 21;
 
     // all_of yields a boolean value, which is true if and only if all values
     // in the list (based on scope) are true.
@@ -161,7 +120,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is true.
-    ValueList all_of = 28;
+    ValueList all_of = 22;
 
     // any_of yields a boolean value, and is true if and only if there is a
     // value in the list (based on scope) which is true.
@@ -169,7 +128,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is false.
-    ValueList any_of = 29;
+    ValueList any_of = 23;
 
     // eq yields a boolean value, which is true if and only if all values in
     // the list are equal. Two NaN values are considered equal for this purpose.
@@ -177,7 +136,7 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList eq = 30;
+    ValueList eq = 24;
 
     // neq yields a boolean value, which is true if and only if all values
     // in the list are mutually distinct. Two NaN values are not considered
@@ -186,47 +145,47 @@ message Value {
     // remaining values are ignored.
     // It is an error if the non-ignored values do not have the same type.
     // If the list is empty or has only one element, the result is true.
-    ValueList neq = 31;
+    ValueList neq = 25;
 
     // seq yields the value of last evaluated element in the list (based on
     // scope). This is normally the final element, but occurrences of break
     // or continue may cut the evaluation short. If no elements are evaluated,
     // seq yields nil.
-    ValueList seq = 32;
+    ValueList seq = 26;
 
     // switch yields a value (based on scope) based on conditions.
-    Switch switch = 33;
+    Switch switch = 27;
 
     // while repeatedly evaluates the then part of the branch for as long
     // as the case yields true. The final value from then is returned.
     // If then is never evaluated, nil is returned.
-    Branch while = 34;
+    Branch while = 28;
 
     // break breaks out of the given number of while evaluations.
     // while evaluations where break occurs in the conditional part do not
     // count.
-    uint32 break = 35;
+    uint32 break = 29;
 
     // continue continues the given nth enclosing while evaluation.
     // while evaluations where continue occurs in the conditional
     // part do not count.
-    uint32 continue = 36;
+    uint32 continue = 30;
 
     // store stores the evaluated value in the environment.
     // The completely evaluated value can be retrieved again with load.
-    StoredValue store = 37;
+    StoredValue store = 31;
 
     // proc stores the value in the environment.
     // Only when loaded, the value will be evaluated with the then valid
     // environment and scope.
-    StoredValue proc = 38;
+    StoredValue proc = 32;
 
     // load loads a value from the environment.
     // If no previous store is present, the value is nil.
-    string load = 39;
+    string load = 33;
 
     // program is a user defined program to determine the value.
-    Program program = 40;
+    Program program = 34;
 
     // scope_range ranges over the iterable scope value, evaluating the Value
     // for each element. It is an error if the current scope value is not an
@@ -243,7 +202,7 @@ message Value {
     // If an evaluation yields a value other than nil, evaluation
     // stops early and scope_range yields that value. Otherwise, scope_range
     // yields nil.
-    Value scope_range = 41;
+    Value scope_range = 35;
   }
 
   // Branch describes a conditional branch.

@@ -100,26 +100,11 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 	*cyclesLeft--
 	// shift scope
 	var err error
-	switch x := value.Scope.(type) {
-	case nil:
-		// Scope remains unchanged
-	case *Value_Same:
-		env = env.shiftScope()
-	case *Value_Name:
-		env, err = env.shiftScopeByName(x.Name)
-	case *Value_Index:
-		env, err = env.shiftScopeByIndex(x.Index)
-	case *Value_BoolKey:
-		env, err = env.shiftScopeByBoolKey(x.BoolKey)
-	case *Value_UintKey:
-		env, err = env.shiftScopeByUintKey(x.UintKey)
-	case *Value_IntKey:
-		env, err = env.shiftScopeByIntKey(x.IntKey)
-	default:
-		panic(fmt.Sprintf("BUG: unsupported scope type %T", value.Scope))
-	}
-	if err != nil {
-		return nil, err
+	if value.Scope != nil {
+		env, err = env.shiftScope(value.Scope)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// handle args
 	if err = env.scope.DropArgs(value.DropArgs); err != nil {
@@ -138,8 +123,6 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		return env.scope.Value(), nil
 	case *Value_Arg:
 		return env.scope.Arg(x.Arg)
-	case *Value_This:
-		return eval(env, cyclesLeft, x.This)
 	case *Value_Parent:
 		env, err = env.shiftScopeToParent()
 		if err != nil {

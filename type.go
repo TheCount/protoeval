@@ -7,7 +7,11 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/known/anypb"
 )
+
+// anypbName is the full name of the well-known Any protobuf message.
+var anypbName = (&anypb.Any{}).ProtoReflect().Descriptor().FullName()
 
 // getProtoType returns the Go type for the protobuf type specified by the
 // protobuf kind and protobuf type name.

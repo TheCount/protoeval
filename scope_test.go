@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // TestEmptyScope tests a value with empty scope.
@@ -32,15 +33,27 @@ func TestFieldScope(t *testing.T) {
 	}
 	env := NewEnv()
 	if _, err := Eval(env, testmsg, &Value{
-		Scope: &Value_Name{
-			Name: "does_not_exist",
+		Scope: &structpb.ListValue{
+			Values: []*structpb.Value{
+				&structpb.Value{
+					Kind: &structpb.Value_StringValue{
+						StringValue: "does_not_exist",
+					},
+				},
+			},
 		},
 	}); err == nil {
 		t.Error("expected error selecting nonexistent field")
 	}
 	result, err := Eval(env, testmsg, &Value{
-		Scope: &Value_Name{
-			Name: "a_scalar",
+		Scope: &structpb.ListValue{
+			Values: []*structpb.Value{
+				&structpb.Value{
+					Kind: &structpb.Value_StringValue{
+						StringValue: "a_scalar",
+					},
+				},
+			},
 		},
 	})
 	if err != nil {
@@ -64,13 +77,17 @@ func TestStringMapScope(t *testing.T) {
 	}
 	env := NewEnv()
 	if _, err := Eval(env, testmsg, &Value{
-		Scope: &Value_Name{
-			Name: "a_string_map",
-		},
-		Value: &Value_This{
-			This: &Value{
-				Scope: &Value_Name{
-					Name: "does_not_exist",
+		Scope: &structpb.ListValue{
+			Values: []*structpb.Value{
+				&structpb.Value{
+					Kind: &structpb.Value_StringValue{
+						StringValue: "a_string_map",
+					},
+				},
+				&structpb.Value{
+					Kind: &structpb.Value_StringValue{
+						StringValue: "does_not_exist",
+					},
 				},
 			},
 		},
@@ -78,13 +95,17 @@ func TestStringMapScope(t *testing.T) {
 		t.Error("expected error selecting nonexistent map entry")
 	}
 	result, err := Eval(env, testmsg, &Value{
-		Scope: &Value_Name{
-			Name: "a_string_map",
-		},
-		Value: &Value_This{
-			This: &Value{
-				Scope: &Value_Name{
-					Name: "MapKey",
+		Scope: &structpb.ListValue{
+			Values: []*structpb.Value{
+				&structpb.Value{
+					Kind: &structpb.Value_StringValue{
+						StringValue: "a_string_map",
+					},
+				},
+				&structpb.Value{
+					Kind: &structpb.Value_StringValue{
+						StringValue: "MapKey",
+					},
 				},
 			},
 		},
@@ -110,13 +131,17 @@ func TestBoolMapScope(t *testing.T) {
 	}
 	env := NewEnv()
 	if _, err := Eval(env, testmsg, &Value{
-		Scope: &Value_Name{
-			Name: "a_bool_map",
-		},
-		Value: &Value_This{
-			This: &Value{
-				Scope: &Value_BoolKey{
-					BoolKey: false,
+		Scope: &structpb.ListValue{
+			Values: []*structpb.Value{
+				&structpb.Value{
+					Kind: &structpb.Value_StringValue{
+						StringValue: "a_bool_map",
+					},
+				},
+				&structpb.Value{
+					Kind: &structpb.Value_BoolValue{
+						BoolValue: false,
+					},
 				},
 			},
 		},
@@ -124,13 +149,17 @@ func TestBoolMapScope(t *testing.T) {
 		t.Error("expected error selecting nonexistent map entry")
 	}
 	result, err := Eval(env, testmsg, &Value{
-		Scope: &Value_Name{
-			Name: "a_bool_map",
-		},
-		Value: &Value_This{
-			This: &Value{
-				Scope: &Value_BoolKey{
-					BoolKey: true,
+		Scope: &structpb.ListValue{
+			Values: []*structpb.Value{
+				&structpb.Value{
+					Kind: &structpb.Value_StringValue{
+						StringValue: "a_bool_map",
+					},
+				},
+				&structpb.Value{
+					Kind: &structpb.Value_BoolValue{
+						BoolValue: true,
+					},
 				},
 			},
 		},

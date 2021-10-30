@@ -4,9 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strconv"
 
 	"github.com/google/cel-go/common/types/ref"
 	"google.golang.org/protobuf/reflect/protoreflect"
+	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // scope describes an evaluation scope.
@@ -35,155 +38,233 @@ func (s *scope) Init(msg protoreflect.Message) {
 	s.parent = nil
 }
 
-// scope returns a child scope of this scope with identical content.
-func (s *scope) Shift() scope {
-	return scope{
-		desc:   s.desc,
-		value:  s.value,
-		parent: s,
-	}
-}
-
-// ShiftByName returns a child scope of this scope by indexing this scope
-// by name.
-func (s *scope) ShiftByName(name string) (scope, error) {
-	switch x := s.value.Interface().(type) {
-	case protoreflect.Map:
-		if s.desc.MapKey().Kind() != protoreflect.StringKind {
-			return scope{}, errors.New("map key type must be string")
-		}
-		key := protoreflect.ValueOf(name).MapKey()
-		newValue := x.Get(key)
-		if !newValue.IsValid() {
-			return scope{}, fmt.Errorf("map entry '%s' does not exist", name)
-		}
+// scope returns a child scope of this scope based on the given scope
+// selection path, see Value.Scope.
+func (s *scope) Shift(path *structpb.ListValue) (scope, error) {
+	if len(path.Values) == 0 {
 		return scope{
-			desc:   s.desc.MapValue(),
-			value:  newValue,
+			desc:   s.desc,
+			value:  s.value,
 			parent: s,
 		}, nil
-	case protoreflect.Message:
-		fd := x.Descriptor().Fields().ByName(protoreflect.Name(name))
-		if fd == nil {
-			return scope{}, fmt.Errorf("message has no field '%s'", name)
+	}
+	var err error
+	for i, step := range path.Values {
+		s, err = s.shiftStep(step)
+		if err != nil {
+			return scope{}, fmt.Errorf("shift path index %d: %w", i, err)
 		}
-		if fd.HasPresence() && !x.Has(fd) {
-			return scope{}, fmt.Errorf("message field '%s' not set", name)
+	}
+	return *s, nil
+}
+
+// shiftStep shifts this scope by one step.
+func (s *scope) shiftStep(step *structpb.Value) (*scope, error) {
+	switch x := step.Kind.(type) {
+	case *structpb.Value_StringValue:
+		switch y := s.value.Interface().(type) {
+		case protoreflect.Message:
+			desc := y.Descriptor()
+			if desc.FullName() == anypbName {
+				msg, err := y.Interface().(*anypb.Any).UnmarshalNew()
+				if err != nil {
+					return nil, fmt.Errorf("unwrap Any: %w", err)
+				}
+				y = msg.ProtoReflect()
+				desc = y.Descriptor()
+			}
+			fd := desc.Fields().ByName(protoreflect.Name(x.StringValue))
+			if fd == nil {
+				return nil, fmt.Errorf("no such message field: %s", x.StringValue)
+			}
+			if fd.HasPresence() && !y.Has(fd) {
+				return nil, fmt.Errorf("message field %s not set", x.StringValue)
+			}
+			return &scope{
+				desc:   fd,
+				value:  y.Get(fd),
+				parent: s,
+			}, nil
+		case protoreflect.Map:
+			var key protoreflect.MapKey
+			switch s.desc.MapKey().Kind() {
+			case protoreflect.StringKind:
+				key = protoreflect.ValueOfString(x.StringValue).MapKey()
+			case protoreflect.Int32Kind, protoreflect.Sint32Kind,
+				protoreflect.Sfixed32Kind:
+				n, err := strconv.ParseInt(x.StringValue, 0, 32)
+				if err != nil {
+					return nil, fmt.Errorf("map key '%s' invalid for map key kind %s",
+						x.StringValue, s.desc.MapKey().Kind())
+				}
+				key = protoreflect.ValueOfInt32(int32(n)).MapKey()
+			case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+				n, err := strconv.ParseUint(x.StringValue, 0, 32)
+				if err != nil {
+					return nil, fmt.Errorf("map key '%s' invalid for map key kind %s",
+						x.StringValue, s.desc.MapKey().Kind())
+				}
+				key = protoreflect.ValueOfUint32(uint32(n)).MapKey()
+			case protoreflect.Int64Kind, protoreflect.Sint64Kind,
+				protoreflect.Sfixed64Kind:
+				n, err := strconv.ParseInt(x.StringValue, 0, 64)
+				if err != nil {
+					return nil, fmt.Errorf("map key '%s' invalid for map key kind %s",
+						x.StringValue, s.desc.MapKey().Kind())
+				}
+				key = protoreflect.ValueOfInt64(n).MapKey()
+			case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+				n, err := strconv.ParseUint(x.StringValue, 0, 64)
+				if err != nil {
+					return nil, fmt.Errorf("map key '%s' invalid for map key kind %s",
+						x.StringValue, s.desc.MapKey().Kind())
+				}
+				key = protoreflect.ValueOfUint64(n).MapKey()
+			case protoreflect.BoolKind:
+				b, err := strconv.ParseBool(x.StringValue)
+				if err != nil {
+					return nil, fmt.Errorf("map key '%s' invalid for map key kind %s",
+						x.StringValue, s.desc.MapKey().Kind())
+				}
+				key = protoreflect.ValueOfBool(b).MapKey()
+			default:
+				panic(fmt.Sprintf("BUG: unsupported map key kind %s",
+					s.desc.MapKey().Kind()))
+			}
+			if !y.Has(key) {
+				return nil, fmt.Errorf("map has no key '%s'", x.StringValue)
+			}
+			return &scope{
+				desc:   s.desc,
+				value:  y.Get(key),
+				parent: s,
+			}, nil
+		case protoreflect.List:
+			return nil, errors.New("cannot index list with string")
+		default:
+			return nil, fmt.Errorf("cannot index %s with string", s.desc.Kind())
 		}
-		return scope{
-			desc:   fd,
-			value:  x.Get(fd),
-			parent: s,
-		}, nil
+	case *structpb.Value_NumberValue:
+		switch y := s.value.Interface().(type) {
+		case protoreflect.Message:
+			fn := protoreflect.FieldNumber(x.NumberValue)
+			test := float64(fn)
+			if test != x.NumberValue {
+				return nil, fmt.Errorf("invalid field number: %f", x.NumberValue)
+			}
+			desc := y.Descriptor()
+			if desc.FullName() == anypbName {
+				msg, err := y.Interface().(*anypb.Any).UnmarshalNew()
+				if err != nil {
+					return nil, fmt.Errorf("unwrap Any: %w", err)
+				}
+				y = msg.ProtoReflect()
+				desc = y.Descriptor()
+			}
+			fd := desc.Fields().ByNumber(fn)
+			if fd == nil {
+				return nil, fmt.Errorf("no such message field number: %d", fn)
+			}
+			if fd.HasPresence() && !y.Has(fd) {
+				return nil, fmt.Errorf("message field %s (%d) not set", fd.Name(), fn)
+			}
+			return &scope{
+				desc:   fd,
+				value:  y.Get(fd),
+				parent: s,
+			}, nil
+		case protoreflect.Map:
+			var key protoreflect.MapKey
+			switch s.desc.MapKey().Kind() {
+			case protoreflect.StringKind:
+				return nil, errors.New("cannot index string key map with number")
+			case protoreflect.Int32Kind, protoreflect.Sint32Kind,
+				protoreflect.Sfixed32Kind:
+				n := int32(x.NumberValue)
+				test := float64(n)
+				if test != x.NumberValue {
+					return nil, fmt.Errorf("cannot convert %f to int32", x.NumberValue)
+				}
+				key = protoreflect.ValueOfInt32(n).MapKey()
+			case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+				n := uint32(x.NumberValue)
+				test := float64(n)
+				if test != x.NumberValue {
+					return nil, fmt.Errorf("cannot convert %f to uint32", x.NumberValue)
+				}
+				key = protoreflect.ValueOfUint32(n).MapKey()
+			case protoreflect.Int64Kind, protoreflect.Sint64Kind,
+				protoreflect.Sfixed64Kind:
+				n := int64(x.NumberValue)
+				test := float64(n)
+				if test != x.NumberValue {
+					return nil, fmt.Errorf("cannot convert %f to int64", x.NumberValue)
+				}
+				key = protoreflect.ValueOfInt64(n).MapKey()
+			case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+				n := uint64(x.NumberValue)
+				test := float64(n)
+				if test != x.NumberValue {
+					return nil, fmt.Errorf("cannot convert %f to uint64", x.NumberValue)
+				}
+				key = protoreflect.ValueOfUint64(n).MapKey()
+			case protoreflect.BoolKind:
+				return nil, errors.New("cannot index bool key map with number")
+			default:
+				panic(fmt.Sprintf("BUG: unsupported map key kind %s",
+					s.desc.MapKey().Kind()))
+			}
+			if !y.Has(key) {
+				return nil, fmt.Errorf("map has no key %d", key.Interface())
+			}
+			return &scope{
+				desc:   s.desc,
+				value:  y.Get(key),
+				parent: s,
+			}, nil
+		case protoreflect.List:
+			idx := int(x.NumberValue)
+			test := float64(idx)
+			if test != x.NumberValue {
+				return nil, fmt.Errorf("cannot convert %f to list index", x.NumberValue)
+			}
+			if idx < 0 || idx >= y.Len() {
+				return nil, fmt.Errorf("list index %d out of bounds", idx)
+			}
+			return &scope{
+				desc:   s.desc,
+				value:  y.Get(idx),
+				parent: s,
+			}, nil
+		default:
+			return nil, fmt.Errorf("cannot index %s with number", s.desc.Kind())
+		}
+	case *structpb.Value_BoolValue:
+		switch y := s.value.Interface().(type) {
+		case protoreflect.Message:
+			return nil, errors.New("cannot index message with bool")
+		case protoreflect.Map:
+			if s.desc.MapKey().Kind() != protoreflect.BoolKind {
+				return nil, fmt.Errorf("cannot index %s with bool",
+					s.desc.MapKey().Kind())
+			}
+			key := protoreflect.ValueOfBool(x.BoolValue).MapKey()
+			if !y.Has(key) {
+				return nil, fmt.Errorf("map has no key '%t'", x.BoolValue)
+			}
+			return &scope{
+				desc:   s.desc,
+				value:  y.Get(key),
+				parent: s,
+			}, nil
+		case protoreflect.List:
+			return nil, errors.New("cannot index list with bool")
+		default:
+			return nil, fmt.Errorf("cannot index %s with bool", s.desc.Kind())
+		}
 	default:
-		return scope{}, fmt.Errorf("type %T cannot be indexed by name",
-			s.value.Interface())
+		return nil, fmt.Errorf("scope step kind %T not supported", step.Kind)
 	}
-}
-
-// ShiftByIndex returns a child scope of this scope by indexing this scope.
-func (s *scope) ShiftByIndex(index uint32) (scope, error) {
-	list, ok := s.value.Interface().(protoreflect.List)
-	if !ok {
-		return scope{}, fmt.Errorf("type %T cannot be indexed",
-			s.value.Interface())
-	}
-	intIndex := int(index)
-	if index > math.MaxInt32 || intIndex >= list.Len() {
-		// FIXME: once we have Go 1.17, we could use math.MaxInt
-		return scope{}, fmt.Errorf("index %d out of bounds", index)
-	}
-	return scope{
-		desc:   s.desc,
-		value:  list.Get(intIndex),
-		parent: s,
-	}, nil
-}
-
-// ShiftByBoolKey returns a child scope of this scope by using the specified
-// key as map index.
-func (s *scope) ShiftByBoolKey(key bool) (scope, error) {
-	m, ok := s.value.Interface().(protoreflect.Map)
-	if !ok {
-		return scope{}, fmt.Errorf("type %T cannot be indexed by bool key",
-			s.value.Interface())
-	}
-	if s.desc.MapKey().Kind() != protoreflect.BoolKind {
-		return scope{}, fmt.Errorf("map key type: expected bool, got %s",
-			s.desc.MapKey().Kind())
-	}
-	newvalue := m.Get(protoreflect.ValueOf(key).MapKey())
-	if !newvalue.IsValid() {
-		return scope{}, fmt.Errorf("map entry '%t' does not exist", key)
-	}
-	return scope{
-		desc:   s.desc.MapValue(),
-		value:  newvalue,
-		parent: s,
-	}, nil
-}
-
-// ShiftByUintKey returns a child scope of this scope by using the specified
-// key as map index.
-func (s *scope) ShiftByUintKey(key uint64) (scope, error) {
-	m, ok := s.value.Interface().(protoreflect.Map)
-	if !ok {
-		return scope{}, fmt.Errorf("type %T cannot be indexed by uint key",
-			s.value.Interface())
-	}
-	var keyValue protoreflect.MapKey
-	switch s.desc.MapKey().Kind() {
-	case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
-		keyValue = protoreflect.ValueOfUint64(key).MapKey()
-	case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
-		if key > math.MaxUint32 {
-			return scope{}, fmt.Errorf("key %d out of bounds", key)
-		}
-		keyValue = protoreflect.ValueOfUint32(uint32(key)).MapKey()
-	default:
-		return scope{}, fmt.Errorf("map key type: expected uint, got %s",
-			s.desc.MapKey().Kind())
-	}
-	newvalue := m.Get(keyValue)
-	if !newvalue.IsValid() {
-		return scope{}, fmt.Errorf("map entry %d does not exist", key)
-	}
-	return scope{
-		desc:   s.desc.MapValue(),
-		value:  newvalue,
-		parent: s,
-	}, nil
-}
-
-// ShiftByIntKey returns a child scope of this scope by using the specified
-// key as map index.
-func (s *scope) ShiftByIntKey(key int64) (scope, error) {
-	m, ok := s.value.Interface().(protoreflect.Map)
-	if !ok {
-		return scope{}, fmt.Errorf("type %T cannot be indexed by int key",
-			s.value.Interface())
-	}
-	var keyValue protoreflect.MapKey
-	switch s.desc.MapKey().Kind() {
-	case protoreflect.Int64Kind, protoreflect.Sint64Kind,
-		protoreflect.Sfixed64Kind:
-		keyValue = protoreflect.ValueOfInt64(key).MapKey()
-	case protoreflect.Int32Kind, protoreflect.Sint32Kind,
-		protoreflect.Sfixed32Kind:
-		if key < math.MinInt32 || key > math.MaxInt32 {
-			return scope{}, fmt.Errorf("key %d out of bounds", key)
-		}
-		keyValue = protoreflect.ValueOfInt32(int32(key)).MapKey()
-	}
-	newvalue := m.Get(keyValue)
-	if !newvalue.IsValid() {
-		return scope{}, fmt.Errorf("map entry %d does not exist", key)
-	}
-	return scope{
-		desc:   s.desc.MapValue(),
-		value:  newvalue,
-		parent: s,
-	}, nil
 }
 
 // Value returns the value of this scope.
