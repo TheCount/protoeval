@@ -36,7 +36,7 @@ var CelArgListType = &celArgListType{}
 // arguments.
 type celArgList scope
 
-var _ ref.Val = &celArgList{}
+var _ traits.Lister = &celArgList{}
 
 // Add implements traits.Adder.Add for traits.Lister.
 func (cal *celArgList) Add(ref.Val) ref.Val {
@@ -126,6 +126,11 @@ func (cal *celArgList) length() int {
 		return 0
 	}
 	return len(cal.args) + (*celArgList)(cal.parent).length()
+}
+
+// Size implements traits.Sizer.Size for traits.Lister.
+func (cal *celArgList) Size() ref.Val {
+	return types.Int(cal.length())
 }
 
 // Type implements ref.Val.Type for traits.Lister.
