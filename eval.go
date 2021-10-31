@@ -534,14 +534,26 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			return nil, fmt.Errorf("evaluate CEL program: %w", err)
 		}
 		return out, nil
-	case *Value_ScopeRange:
-		sv := env.scope.Value()
+	case *Value_Range_:
+		if x.Range.Value == nil {
+			return nil, errors.New("range value missing")
+		}
+		var sv ref.Val
+		if x.Range.Iterable == nil {
+			sv = env.scope.Value()
+		} else {
+			var err error
+			sv, err = eval(env, cyclesLeft, x.Range.Iterable)
+			if err != nil {
+				return sv, fmt.Errorf("eval range iterable: %w", err)
+			}
+		}
 		switch y := sv.(type) {
 		case traits.Lister:
 			for i, iter := 0, y.Iterator(); iter.HasNext() == types.True; i++ {
 				env.scope.PushArg(iter.Next())
 				env.scope.PushArg(types.Int(i))
-				rv, err := eval(env, cyclesLeft, x.ScopeRange)
+				rv, err := eval(env, cyclesLeft, x.Range.Value)
 				if err2 := env.scope.DropArgs(2); err2 != nil {
 					return nil,
 						fmt.Errorf("list range element %d drop index/value: %w", i, err2)
@@ -560,7 +572,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				value := y.Get(key)
 				env.scope.PushArg(value)
 				env.scope.PushArg(key)
-				rv, err := eval(env, cyclesLeft, x.ScopeRange)
+				rv, err := eval(env, cyclesLeft, x.Range.Value)
 				if err2 := env.scope.DropArgs(2); err2 != nil {
 					return nil, fmt.Errorf("map range key %v drop index/value: %w",
 						key.Value(), err2)

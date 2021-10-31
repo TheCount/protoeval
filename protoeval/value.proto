@@ -170,22 +170,9 @@ message Value {
     // program is a user defined program to determine the value.
     Program program = 32;
 
-    // scope_range ranges over the iterable scope value, evaluating the Value
-    // for each element. It is an error if the current scope value is not an
-    // aggregate, i. e., not a list or a map.
-    //
-    // Two arguments will be added before each evaluation, and
-    // removed after each evaluation: for a list, the 0-th argument is the zero
-    // based list index, the 1st argument is the list value. For a map, the 0-th
-    // argument is the map key, and the 1st argument is the map value.
-    //
-    // A list will be evaluated in order. The evaluation order for a map is
-    // unspecified.
-    //
-    // If an evaluation yields a value other than nil, evaluation
-    // stops early and scope_range yields that value. Otherwise, scope_range
-    // yields nil.
-    Value scope_range = 33;
+    // range ranges over an aggregate value. See the Range documentation for
+    // which value this yields.
+    Range range = 33;
   }
 
   // Branch describes a conditional branch.
@@ -349,6 +336,29 @@ message Value {
     // easily human readable multiline strings (namely JSON).
     // If code is used, lines must be empty.
     repeated string lines = 2;
+  }
+
+  // Range describes a value obtains by ranging over an aggregate, i. e., a
+  // list or a map.
+  message Range {
+    // iterable is the iterable value ranged over. If omitted, the scope value
+    // is used instead. It is an error if this value is not an aggregate.
+    Value iterable = 1;
+
+    // value is evaluated for each element in the iterable value ranged over.
+    //
+    // Two arguments will be added before each evaluation, and
+    // removed after each evaluation: for a list, the 0-th argument is the zero
+    // based list index, the 1st argument is the list value. For a map, the 0-th
+    // argument is the map key, and the 1st argument is the map value.
+    //
+    // A list will be evaluated in order. The evaluation order for a map is
+    // unspecified.
+    //
+    // If an evaluation yields a value other than nil, evaluation
+    // stops early and the range yields that value. Otherwise, the range
+    // yields nil.
+    Value value = 2;
   }
 
   // StoredValue describes a value stored in the environment.
