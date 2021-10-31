@@ -519,10 +519,11 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		} else if len(x.Program.Lines) != 0 {
 			return nil, errors.New("lines must not be set if code is non-empty")
 		}
-		celEnv, err := cel.NewEnv(
+		cEnv, err := cel.NewEnv(
 			cel.CustomTypeAdapter(celTypeRegistry),
 			cel.CustomTypeProvider(celTypeRegistry),
 			cel.Declarations(
+				decls.NewVar("env", decls.NewMapType(decls.String, decls.Dyn)),
 				decls.NewVar("scope",
 					decls.NewObjectType("com.github.thecount.protoeval.Scope"),
 				),
@@ -532,11 +533,11 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		if err != nil {
 			return nil, fmt.Errorf("build CEL environment: %w", err)
 		}
-		ast, iss := celEnv.Compile(code)
+		ast, iss := cEnv.Compile(code)
 		if iss.Err() != nil {
 			return nil, fmt.Errorf("compile CEL program source: %w", iss.Err())
 		}
-		prg, err := celEnv.Program(ast)
+		prg, err := cEnv.Program(ast)
 		if err != nil {
 			return nil, fmt.Errorf("construct CEL program: %w", err)
 		}
@@ -545,6 +546,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			return nil, fmt.Errorf("construct CEL scope: %w", err)
 		}
 		out, _, err := prg.Eval(map[string]interface{}{
+			"env":   (*celEnv)(env),
 			"scope": celScope,
 			"args":  (*celArgList)(&env.scope),
 		})
