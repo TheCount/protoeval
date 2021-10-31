@@ -130,62 +130,45 @@ message Value {
     // If the list is empty, the result is false.
     ValueList any_of = 23;
 
-    // eq yields a boolean value, which is true if and only if all values in
-    // the list are equal. Two NaN values are considered equal for this purpose.
-    // If an element is found to be unequal to the previous elements, the
-    // remaining values are ignored.
-    // It is an error if the non-ignored values do not have the same type.
-    // If the list is empty or has only one element, the result is true.
-    ValueList eq = 24;
-
-    // neq yields a boolean value, which is true if and only if all values
-    // in the list are mutually distinct. Two NaN values are not considered
-    // distinct for this purpose.
-    // If an element is found to be equal to one of the previous elements, the
-    // remaining values are ignored.
-    // It is an error if the non-ignored values do not have the same type.
-    // If the list is empty or has only one element, the result is true.
-    ValueList neq = 25;
-
     // seq yields the value of last evaluated element in the list (based on
     // scope). This is normally the final element, but occurrences of break
     // or continue may cut the evaluation short. If no elements are evaluated,
     // seq yields nil.
-    ValueList seq = 26;
+    ValueList seq = 24;
 
     // switch yields a value (based on scope) based on conditions.
-    Switch switch = 27;
+    Switch switch = 25;
 
     // while repeatedly evaluates the then part of the branch for as long
     // as the case yields true. The final value from then is returned.
     // If then is never evaluated, nil is returned.
-    Branch while = 28;
+    Branch while = 26;
 
     // break breaks out of the given number of while evaluations.
     // while evaluations where break occurs in the conditional part do not
     // count.
-    uint32 break = 29;
+    uint32 break = 27;
 
     // continue continues the given nth enclosing while evaluation.
     // while evaluations where continue occurs in the conditional
     // part do not count.
-    uint32 continue = 30;
+    uint32 continue = 28;
 
     // store stores the evaluated value in the environment.
     // The completely evaluated value can be retrieved again with load.
-    StoredValue store = 31;
+    StoredValue store = 29;
 
     // proc stores the value in the environment.
     // Only when loaded, the value will be evaluated with the then valid
     // environment and scope.
-    StoredValue proc = 32;
+    StoredValue proc = 30;
 
     // load loads a value from the environment.
     // If no previous store is present, the value is nil.
-    string load = 33;
+    string load = 31;
 
     // program is a user defined program to determine the value.
-    Program program = 34;
+    Program program = 32;
 
     // scope_range ranges over the iterable scope value, evaluating the Value
     // for each element. It is an error if the current scope value is not an
@@ -202,7 +185,7 @@ message Value {
     // If an evaluation yields a value other than nil, evaluation
     // stops early and scope_range yields that value. Otherwise, scope_range
     // yields nil.
-    Value scope_range = 35;
+    Value scope_range = 33;
   }
 
   // Branch describes a conditional branch.

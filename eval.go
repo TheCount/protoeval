@@ -333,48 +333,6 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				i, rv)
 		}
 		return types.False, nil
-	case *Value_Eq:
-		if len(x.Eq.Values) == 0 {
-			return types.True, nil
-		}
-		firstValue, err := eval(env, cyclesLeft, x.Eq.Values[0])
-		if err != nil {
-			return firstValue, fmt.Errorf("eval eq index 0: %w", err)
-		}
-		for i := 1; i < len(x.Eq.Values); i++ {
-			value, err := eval(env, cyclesLeft, x.Eq.Values[i])
-			if err != nil {
-				return value, fmt.Errorf("eval eq index %d: %w", i, err)
-			}
-			check := firstValue.Equal(value)
-			if check != types.True {
-				return check, nil
-			}
-		}
-		return types.True, nil
-	case *Value_Neq:
-		if len(x.Neq.Values) == 0 {
-			return types.True, nil
-		}
-		values := make([]ref.Val, len(x.Neq.Values))
-		var err error
-		values[0], err = eval(env, cyclesLeft, x.Neq.Values[0])
-		if err != nil {
-			return values[0], fmt.Errorf("eval neq index 0: %w", err)
-		}
-		for i := 1; i < len(x.Neq.Values); i++ {
-			values[i], err = eval(env, cyclesLeft, x.Neq.Values[i])
-			if err != nil {
-				return values[i], fmt.Errorf("eval neq index %d: %w", i, err)
-			}
-			for j := 0; j < i; j++ {
-				check := values[j].Equal(values[i])
-				if check != types.False {
-					return check, nil
-				}
-			}
-		}
-		return types.True, nil
 	case *Value_Seq:
 		var result ref.Val
 		for _, value := range x.Seq.Values {
