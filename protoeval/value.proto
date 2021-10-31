@@ -65,54 +65,52 @@ message Value {
     // default is the default value for the scope.
     google.protobuf.Empty default = 6;
 
-    // nil is an explicit nil value.
-    google.protobuf.Empty nil = 7;
-
-    // bool is an explicit boolean value.
-    bool bool = 8;
+    // value is an explicit basic value. A basic value is null, bool, double,
+    // string, a list of basic values, or a map with string keys and basic
+    // values. These are exactly the values which can be represented with JSON
+    // without ancillary information (i. e., JSON numbers are all interpreted as
+    // double; see the int and uint fields to create explicit integer values).
+    google.protobuf.Value basic_value = 7;
 
     // int is an explicit signed integer value.
-    int64 int = 9;
+    int64 int = 8;
 
     // uint is an explicit unsigned integer value.
-    uint64 uint = 10;
-
-    // double is an explicit double value.
-    double double = 11;
-
-    // string is an explicit string value.
-    string string = 12;
+    uint64 uint = 9;
 
     // bytes is an explicit bytes value.
-    bytes bytes = 13;
+    bytes bytes = 10;
 
     // enum is an explicit enum value.
-    Enum enum = 14;
+    Enum enum = 11;
 
-    // list is an explicit list value based on scope.
-    List list = 15;
+    // list is an explicit list value based on scope. For simple lists,
+    // basic_value may be a better choice.
+    List list = 12;
 
-    // map is an explicit map value based on scope.
-    Map map = 16;
+    // map is an explicit map value based on scope. For simple maps,
+    // basic_value may be a better choice.
+    Map map = 13;
 
-    // message is an explicit message value based on scope.
-    Message message = 17;
+    // message is an explicit message value based on scope. For simple
+    // messages, basic_message may be a better choice.
+    Message message = 14;
 
     // basic_message is an explicit message value. It uses the protobuf Any
     // mechanism. While this doesn't allow complex message generation, the
     // specification of the message itself in a configuration file will be
     // less cluttered.
-    google.protobuf.Any basic_message = 18;
+    google.protobuf.Any basic_message = 15;
 
     // duration is an explicit duration.
-    google.protobuf.Duration duration = 19;
+    google.protobuf.Duration duration = 16;
 
     // timestamp is an explicit timestamp.
-    google.protobuf.Timestamp timestamp = 20;
+    google.protobuf.Timestamp timestamp = 17;
 
     // not yields a boolean value which is the inverse of the specified value
     // based on scope. It is an error if the specified value is not boolean.
-    Value not = 21;
+    Value not = 18;
 
     // all_of yields a boolean value, which is true if and only if all values
     // in the list (based on scope) are true.
@@ -120,7 +118,7 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is true.
-    ValueList all_of = 22;
+    ValueList all_of = 19;
 
     // any_of yields a boolean value, and is true if and only if there is a
     // value in the list (based on scope) which is true.
@@ -128,51 +126,51 @@ message Value {
     // remaining entries in the list are ignored.
     // It is an error if there are values which are not boolean.
     // If the list is empty, the result is false.
-    ValueList any_of = 23;
+    ValueList any_of = 20;
 
     // seq yields the value of last evaluated element in the list (based on
     // scope). This is normally the final element, but occurrences of break
     // or continue may cut the evaluation short. If no elements are evaluated,
-    // seq yields nil.
-    ValueList seq = 24;
+    // seq yields null.
+    ValueList seq = 21;
 
     // switch yields a value (based on scope) based on conditions.
-    Switch switch = 25;
+    Switch switch = 22;
 
     // while repeatedly evaluates the then part of the branch for as long
     // as the case yields true. The final value from then is returned.
-    // If then is never evaluated, nil is returned.
-    Branch while = 26;
+    // If then is never evaluated, null is returned.
+    Branch while = 23;
 
     // break breaks out of the given number of while evaluations.
     // while evaluations where break occurs in the conditional part do not
     // count.
-    uint32 break = 27;
+    uint32 break = 24;
 
     // continue continues the given nth enclosing while evaluation.
     // while evaluations where continue occurs in the conditional
     // part do not count.
-    uint32 continue = 28;
+    uint32 continue = 25;
 
     // store stores the evaluated value in the environment.
     // The completely evaluated value can be retrieved again with load.
-    StoredValue store = 29;
+    StoredValue store = 26;
 
     // proc stores the value in the environment.
     // Only when loaded, the value will be evaluated with the then valid
     // environment and scope.
-    StoredValue proc = 30;
+    StoredValue proc = 27;
 
     // load loads a value from the environment.
-    // If no previous store is present, the value is nil.
-    string load = 31;
+    // If no previous store is present, the value is null.
+    string load = 28;
 
     // program is a user defined program to determine the value.
-    Program program = 32;
+    Program program = 29;
 
     // range ranges over an aggregate value. See the Range documentation for
     // which value this yields.
-    Range range = 33;
+    Range range = 30;
   }
 
   // Branch describes a conditional branch.
@@ -355,9 +353,9 @@ message Value {
     // A list will be evaluated in order. The evaluation order for a map is
     // unspecified.
     //
-    // If an evaluation yields a value other than nil, evaluation
+    // If an evaluation yields a value other than null, evaluation
     // stops early and the range yields that value. Otherwise, the range
-    // yields nil.
+    // yields null.
     Value value = 2;
   }
 
@@ -378,7 +376,7 @@ message Value {
     repeated Branch cases = 1;
 
     // default is the value returned if none of the cases matches.
-    // If default is omitted, the value will be nil in this case.
+    // If default is omitted, the value will be null in this case.
     Value default = 2;
   }
 

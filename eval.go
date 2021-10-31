@@ -16,6 +16,7 @@ import (
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // Errors
@@ -133,18 +134,28 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		return eval(env, cyclesLeft, x.Parent)
 	case *Value_Default:
 		return env.scope.DefaultValue(), nil
-	case *Value_Nil:
-		return types.NullValue, nil
-	case *Value_Bool:
-		return types.Bool(x.Bool), nil
+	case *Value_BasicValue:
+		switch y := x.BasicValue.Kind.(type) {
+		case *structpb.Value_NullValue:
+			return types.NullValue, nil
+		case *structpb.Value_NumberValue:
+			return types.Double(y.NumberValue), nil
+		case *structpb.Value_StringValue:
+			return types.String(y.StringValue), nil
+		case *structpb.Value_BoolValue:
+			return types.Bool(y.BoolValue), nil
+		case *structpb.Value_StructValue:
+			return celTypeRegistry.NativeToValue(y.StructValue), nil
+		case *structpb.Value_ListValue:
+			return celTypeRegistry.NativeToValue(y.ListValue), nil
+		default:
+			panic(fmt.Sprintf("BUG: unhandled structpb Value kind %T",
+				x.BasicValue.Kind))
+		}
 	case *Value_Int:
 		return types.Int(x.Int), nil
 	case *Value_Uint:
 		return types.Uint(x.Uint), nil
-	case *Value_Double:
-		return types.Double(x.Double), nil
-	case *Value_String_:
-		return types.String(x.String_), nil
 	case *Value_Bytes:
 		return types.Bytes(x.Bytes), nil
 	case *Value_Enum_:
