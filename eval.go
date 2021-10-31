@@ -11,6 +11,8 @@ import (
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/common/types/traits"
+	"github.com/google/cel-go/interpreter/functions"
+	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -528,6 +530,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 					decls.NewObjectType("com.github.thecount.protoeval.Scope"),
 				),
 				decls.NewVar("args", decls.NewListType(decls.Dyn)),
+				decls.NewFunction("store",
+					decls.NewInstanceOverload("dyn_store_string",
+						[]*exprpb.Type{decls.Dyn, decls.String}, decls.Dyn)),
 			),
 		)
 		if err != nil {
@@ -537,7 +542,24 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		if iss.Err() != nil {
 			return nil, fmt.Errorf("compile CEL program source: %w", iss.Err())
 		}
-		prg, err := cEnv.Program(ast)
+		prg, err := cEnv.Program(ast, cel.Functions(&functions.Overload{
+			Operator: "dyn_store_string",
+			Binary: func(lhs, rhs ref.Val) ref.Val {
+				v := lhs
+				if types.IsError(v) {
+					return v
+				}
+				k, ok := rhs.Value().(string)
+				if !ok {
+					return types.MaybeNoSuchOverloadErr(rhs)
+				}
+				env.values[k] = envValue{
+					origType: reflect.TypeOf(v.Value()),
+					value:    v,
+				}
+				return v
+			},
+		}))
 		if err != nil {
 			return nil, fmt.Errorf("construct CEL program: %w", err)
 		}
