@@ -201,6 +201,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			if err != nil {
 				return val, fmt.Errorf("eval list index %d: %w", i, err)
 			}
+			if types.IsError(val) {
+				return val, nil
+			}
 			item := reflect.ValueOf(val.Value())
 			if item.Type().ConvertibleTo(typ) {
 				listValue = reflect.Append(listValue, item.Convert(typ))
@@ -239,6 +242,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			if err != nil {
 				return keyVal, fmt.Errorf("eval map entry %d key: %w", i, err)
 			}
+			if types.IsError(keyVal) {
+				return keyVal, nil
+			}
 			keyItem := reflect.ValueOf(keyVal.Value())
 			if !keyItem.Type().ConvertibleTo(keyType) {
 				return nil, fmt.Errorf("cannot convert map entry %d key type %T to %s",
@@ -252,6 +258,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			valueVal, err := eval(env, cyclesLeft, entry.Value)
 			if err != nil {
 				return valueVal, fmt.Errorf("eval map entry %d value: %w", i, err)
+			}
+			if types.IsError(valueVal) {
+				return valueVal, nil
 			}
 			valueItem := reflect.ValueOf(valueVal.Value())
 			if !valueItem.Type().ConvertibleTo(valueType) {
@@ -289,6 +298,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			if err != nil {
 				return rv, fmt.Errorf("eval message field '%s': %w", key, err)
 			}
+			if types.IsError(rv) {
+				return rv, nil
+			}
 			fieldValue, err := go2protofd(rv.Value(), result, fd)
 			if err != nil {
 				return nil, fmt.Errorf("convert %T to field '%s' value: %w",
@@ -308,6 +320,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		if err != nil {
 			return rv, fmt.Errorf("eval not: %w", err)
 		}
+		if types.IsError(rv) {
+			return rv, nil
+		}
 		if bv, ok := rv.(types.Bool); ok {
 			return !bv, nil
 		}
@@ -317,6 +332,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			rv, err := eval(env, cyclesLeft, value)
 			if err != nil {
 				return rv, fmt.Errorf("eval all_of index %d: %w", i, err)
+			}
+			if types.IsError(rv) {
+				return rv, nil
 			}
 			if bv, ok := rv.(types.Bool); ok {
 				if !bv {
@@ -334,6 +352,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			if err != nil {
 				return rv, fmt.Errorf("eval any_of index %d: %w", i, err)
 			}
+			if types.IsError(rv) {
+				return rv, nil
+			}
 			if bv, ok := rv.(types.Bool); ok {
 				if bv {
 					return types.True, nil
@@ -350,6 +371,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			rv, err := eval(env, cyclesLeft, value)
 			switch err.(type) {
 			case nil:
+				if types.IsError(rv) {
+					return rv, nil
+				}
 				result = rv
 			case errBreak, errContinue:
 				return result, fmt.Errorf("seq interrupted: %w", err)
@@ -370,6 +394,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			if err != nil {
 				return cond, fmt.Errorf("eval switch case index %d condition: %w",
 					i, err)
+			}
+			if types.IsError(cond) {
+				return cond, nil
 			}
 			if bv, ok := cond.(types.Bool); !ok {
 				return nil, fmt.Errorf(
@@ -404,6 +431,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			if err != nil {
 				return cond, fmt.Errorf("eval while condition: %w", err)
 			}
+			if types.IsError(cond) {
+				return cond, nil
+			}
 			if bv, ok := cond.(types.Bool); !ok {
 				return nil, fmt.Errorf("eval while condition: expected bool, got %T",
 					cond)
@@ -426,6 +456,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				return value, errBreak(brk - 1)
 			case errors.As(err, &cont):
 				if cont == 1 {
+					if types.IsError(value) {
+						return value, nil
+					}
 					if value != types.NullValue {
 						lastValue = value
 						continue
@@ -453,6 +486,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		value, err := eval(env, cyclesLeft, x.Store.Value)
 		if err != nil {
 			return value, fmt.Errorf("eval store: %w", err)
+		}
+		if types.IsError(value) {
+			return value, nil
 		}
 		env.values[x.Store.Key] = envValue{
 			origType: reflect.TypeOf(value.Value()),
@@ -597,6 +633,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			}
 			return types.NullValue, nil
 		default:
+			if types.IsError(sv) {
+				return sv, nil
+			}
 			return nil, fmt.Errorf("type %T not iterable", sv.Value())
 		}
 	default:
