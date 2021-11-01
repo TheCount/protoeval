@@ -418,7 +418,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				lastValue = value
 			case errors.As(err, &brk):
 				if brk == 1 {
-					if value == nil {
+					if value == types.NullValue {
 						value = lastValue
 					}
 					return value, nil
@@ -426,7 +426,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				return value, errBreak(brk - 1)
 			case errors.As(err, &cont):
 				if cont == 1 {
-					if value != nil {
+					if value != types.NullValue {
 						lastValue = value
 						continue
 					}
@@ -440,12 +440,12 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		if x.Break == 0 {
 			return nil, errors.New("break must be positive")
 		}
-		return nil, errBreak(x.Break)
+		return types.NullValue, errBreak(x.Break)
 	case *Value_Continue:
 		if x.Continue == 0 {
 			return nil, errors.New("continue must be positive")
 		}
-		return nil, errContinue(x.Continue)
+		return types.NullValue, errContinue(x.Continue)
 	case *Value_Store:
 		if x.Store.Value == nil {
 			return nil, errors.New("store value missing")
