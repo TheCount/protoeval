@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 
+	"github.com/google/cel-go/common/types/pb"
 	"github.com/google/cel-go/common/types/ref"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/known/anypb"
@@ -269,7 +270,19 @@ func (s *scope) shiftStep(step *structpb.Value) (*scope, error) {
 
 // Value returns the value of this scope.
 func (s *scope) Value() ref.Val {
-	return celTypeRegistry.NativeToValue(s.value.Interface())
+	switch x := s.value.Interface().(type) {
+	case protoreflect.Map:
+		// CEL cannot deal with protoreflect.Map directly, need to wrap it into
+		// a pb.Map.
+		fd := pb.NewFieldDescription(s.desc)
+		return celTypeRegistry.NativeToValue(&pb.Map{
+			Map:       x,
+			KeyType:   fd.KeyType,
+			ValueType: fd.ValueType,
+		})
+	default:
+		return celTypeRegistry.NativeToValue(s.value.Interface())
+	}
 }
 
 // Value returns the default value of this scope.
@@ -277,9 +290,18 @@ func (s *scope) DefaultValue() ref.Val {
 	switch x := s.value.Interface().(type) {
 	case protoreflect.Message: // s.parent and s.desc may be nil in this case
 		return celTypeRegistry.NativeToValue(x.Type().New())
-	case protoreflect.List, protoreflect.Map:
+	case protoreflect.List:
 		return celTypeRegistry.NativeToValue(
 			s.parent.value.Message().NewField(s.desc).Interface())
+	case protoreflect.Map:
+		// CEL cannot deal with protoreflect.Map directly, need to wrap it into
+		// a pb.Map.
+		fd := pb.NewFieldDescription(s.desc)
+		return celTypeRegistry.NativeToValue(&pb.Map{
+			Map:       s.parent.value.Message().NewField(s.desc).Map(),
+			KeyType:   fd.KeyType,
+			ValueType: fd.ValueType,
+		})
 	default:
 		return celTypeRegistry.NativeToValue(s.desc.Default().Interface())
 	}
