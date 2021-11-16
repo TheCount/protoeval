@@ -18,7 +18,7 @@ func TestRangeScopeList(t *testing.T) {
       "scope": ["a_list"],
       "range": {
         "value": { "program": { "lines": [
-          "(env.sum+args[1]).store('sum') == 0 ? null : null"
+          "(env.sum+args[1]).store('sum').nix()"
         ]}}
       }
     }
@@ -61,7 +61,7 @@ func TestRangeScopeMap(t *testing.T) {
       "scope": ["a_string_map"],
       "range": {
         "value": { "program": { "lines": [
-          "(env.sum+args[1]).store('sum') == 0 ? null : null"
+          "(env.sum+args[1]).store('sum').nix()"
         ]}}
       }
     }

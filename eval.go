@@ -535,6 +535,8 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 					decls.NewObjectType("com.github.thecount.protoeval.Scope"),
 				),
 				decls.NewVar("args", decls.NewListType(decls.Dyn)),
+				decls.NewFunction("nix", decls.NewInstanceOverload("dyn_nix",
+					[]*exprpb.Type{decls.Dyn}, decls.Null)),
 				decls.NewFunction("store",
 					decls.NewInstanceOverload("dyn_store_string",
 						[]*exprpb.Type{decls.Dyn, decls.String}, decls.Dyn)),
@@ -548,6 +550,11 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			return nil, fmt.Errorf("compile CEL program source: %w", iss.Err())
 		}
 		prg, err := cEnv.Program(ast, cel.Functions(&functions.Overload{
+			Operator: "dyn_nix",
+			Unary: func(ref.Val) ref.Val {
+				return types.NullValue
+			},
+		}, &functions.Overload{
 			Operator: "dyn_store_string",
 			Binary: func(lhs, rhs ref.Val) ref.Val {
 				v := lhs
