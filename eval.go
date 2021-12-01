@@ -524,9 +524,9 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		} else if len(x.Program.Lines) != 0 {
 			return nil, errors.New("lines must not be set if code is non-empty")
 		}
-		ast, iss := commonCelEnv.Compile(code)
-		if iss.Err() != nil {
-			return nil, fmt.Errorf("compile CEL program source: %w", iss.Err())
+		ast, err := commonAsts.GetAST(code)
+		if err != nil {
+			return nil, fmt.Errorf("compile CEL program source: %w", err)
 		}
 		prg, err := commonCelEnv.Program(ast, cel.Functions(&functions.Overload{
 			Operator: "dyn_nix",
