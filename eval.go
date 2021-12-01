@@ -7,12 +7,10 @@ import (
 	"strings"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
 	"github.com/google/cel-go/common/types/traits"
 	"github.com/google/cel-go/interpreter/functions"
-	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
@@ -526,30 +524,11 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		} else if len(x.Program.Lines) != 0 {
 			return nil, errors.New("lines must not be set if code is non-empty")
 		}
-		cEnv, err := cel.NewEnv(
-			cel.CustomTypeAdapter(celTypeRegistry),
-			cel.CustomTypeProvider(celTypeRegistry),
-			cel.Declarations(
-				decls.NewVar("env", decls.NewMapType(decls.String, decls.Dyn)),
-				decls.NewVar("scope",
-					decls.NewObjectType("com.github.thecount.protoeval.Scope"),
-				),
-				decls.NewVar("args", decls.NewListType(decls.Dyn)),
-				decls.NewFunction("nix", decls.NewInstanceOverload("dyn_nix",
-					[]*exprpb.Type{decls.Dyn}, decls.Null)),
-				decls.NewFunction("store",
-					decls.NewInstanceOverload("dyn_store_string",
-						[]*exprpb.Type{decls.Dyn, decls.String}, decls.Dyn)),
-			),
-		)
-		if err != nil {
-			return nil, fmt.Errorf("build CEL environment: %w", err)
-		}
-		ast, iss := cEnv.Compile(code)
+		ast, iss := commonCelEnv.Compile(code)
 		if iss.Err() != nil {
 			return nil, fmt.Errorf("compile CEL program source: %w", iss.Err())
 		}
-		prg, err := cEnv.Program(ast, cel.Functions(&functions.Overload{
+		prg, err := commonCelEnv.Program(ast, cel.Functions(&functions.Overload{
 			Operator: "dyn_nix",
 			Unary: func(ref.Val) ref.Val {
 				return types.NullValue

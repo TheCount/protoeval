@@ -5,8 +5,11 @@ import (
 	"strconv"
 	"sync"
 
+	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/checker/decls"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
+	exprpb "google.golang.org/genproto/googleapis/api/expr/v1alpha1"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protodesc"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -16,21 +19,29 @@ import (
 	"google.golang.org/protobuf/types/known/wrapperspb"
 )
 
-// celTypeRegistry is the CEL registry of types we make available to all CEL
-// programs.
-// These are currently all protobuf message types linked into the binary, plus
-// some extra types.
-var celTypeRegistry ref.TypeRegistry
+// CEL global variables
+var (
+	// celTypeRegistry is the CEL registry of types we make available to all CEL
+	// programs.
+	// These are currently all protobuf message types linked into the binary, plus
+	// some extra types.
+	celTypeRegistry ref.TypeRegistry
 
-// initCelTypeRegistryOnce ensures the celTypeRegistry variable is initialised
-// only once, via initCelTypeRegistry().
-// We don't initialise the celTypeRegistry via this package's init function
-// because it might be called before all protobuf types are registered.
-var initCelTypeRegistryOnce sync.Once
+	// commonCelEnv is the common CEL environment used by all programs.
+	commonCelEnv *cel.Env
 
-// initCelTypeRegistry ensures the celTypeRegistry variable is initialised.
-func initCelTypeRegistry() {
-	initCelTypeRegistryOnce.Do(func() {
+	// initCelOnce ensures the CEL global variables are initialised
+	// only once, via initCel().
+	// We don't initialise them via this package's init function
+	// because it might be called before all protobuf types are registered,
+	// leaving gaps in the type registry.
+	initCelOnce sync.Once
+)
+
+// initCel ensures the CEL global variables are initialised.
+func initCel() {
+	initCelOnce.Do(func() {
+		// celTypeRegistry
 		messages := make([]proto.Message, 0)
 		protoregistry.GlobalTypes.
 			RangeMessages(func(mt protoreflect.MessageType) bool {
@@ -44,6 +55,26 @@ func initCelTypeRegistry() {
 			panic(err)
 		}
 		celTypeRegistry = reg
+		// commonCelEnv
+		commonCelEnv, err = cel.NewEnv(
+			cel.CustomTypeAdapter(celTypeRegistry),
+			cel.CustomTypeProvider(celTypeRegistry),
+			cel.Declarations(
+				decls.NewVar("env", decls.NewMapType(decls.String, decls.Dyn)),
+				decls.NewVar("scope",
+					decls.NewObjectType("com.github.thecount.protoeval.Scope"),
+				),
+				decls.NewVar("args", decls.NewListType(decls.Dyn)),
+				decls.NewFunction("nix", decls.NewInstanceOverload("dyn_nix",
+					[]*exprpb.Type{decls.Dyn}, decls.Null)),
+				decls.NewFunction("store",
+					decls.NewInstanceOverload("dyn_store_string",
+						[]*exprpb.Type{decls.Dyn, decls.String}, decls.Dyn)),
+			),
+		)
+		if err != nil {
+			panic(err)
+		}
 	})
 }
 
