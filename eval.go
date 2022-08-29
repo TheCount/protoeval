@@ -534,23 +534,80 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				return types.NullValue
 			},
 		}, &functions.Overload{
-			Operator: "dyn_store_string",
-			Binary: func(lhs, rhs ref.Val) ref.Val {
-				v := lhs
-				if types.IsError(v) {
-					return v
+			Operator: "dyn_set_index_dyn_dyn",
+			Function: func(values ...ref.Val) ref.Val {
+				lhs, idx, value := values[0], values[1], values[2]
+				rLhs := reflect.ValueOf(lhs.Value())
+				if rLhs.Kind() == reflect.Pointer {
+					rLhs = rLhs.Elem()
 				}
-				k, ok := rhs.Value().(string)
-				if !ok {
-					return types.MaybeNoSuchOverloadErr(rhs)
+				switch rLhs.Kind() {
+				default:
+					return types.MaybeNoSuchOverloadErr(lhs)
+				case reflect.Array, reflect.Slice:
+					var i int
+					rIdx := reflect.ValueOf(idx.Value())
+					switch {
+					case rIdx.CanInt():
+						i = int(rIdx.Int())
+					case rIdx.CanUint():
+						i = int(rIdx.Uint())
+					default:
+						return types.MaybeNoSuchOverloadErr(idx)
+					}
+					if i < 0 || i >= rIdx.Len() {
+						return types.NewErr("index %d out of bounds", i)
+					}
+					target := rLhs.Index(i)
+					if rLhs.Type().Elem() == reflect.TypeOf(&value).Elem() {
+						// ref.Val assignment
+						target.Set(reflect.ValueOf(value))
+						return lhs
+					}
+					rValue := reflect.ValueOf(value.Value())
+					if rValue.CanConvert(target.Type()) {
+						target.Set(rValue.Convert(target.Type()))
+						return lhs
+					}
+					return types.MaybeNoSuchOverloadErr(value)
+				case reflect.Map:
+					keyType, elemType := rLhs.Type().Key(), rLhs.Type().Elem()
+					rIdx := reflect.ValueOf(idx.Value())
+					if !rIdx.CanConvert(keyType) {
+						return types.MaybeNoSuchOverloadErr(idx)
+					}
+					if elemType == reflect.TypeOf(&value).Elem() {
+						// ref.Val assignment
+						rLhs.SetMapIndex(rIdx.Convert(keyType), reflect.ValueOf(value))
+						return lhs
+					}
+					rValue := reflect.ValueOf(value.Value())
+					if rValue.CanConvert(elemType) {
+						rLhs.SetMapIndex(rIdx.Convert(keyType), rValue.Convert(elemType))
+						return lhs
+					}
+					return types.MaybeNoSuchOverloadErr(value)
 				}
-				env.values[k] = envValue{
-					origType: reflect.TypeOf(v.Value()),
-					value:    v,
-				}
-				return v
 			},
-		}))
+		},
+			&functions.Overload{
+				Operator: "dyn_store_string",
+				Binary: func(lhs, rhs ref.Val) ref.Val {
+					v := lhs
+					if types.IsError(v) {
+						return v
+					}
+					k, ok := rhs.Value().(string)
+					if !ok {
+						return types.MaybeNoSuchOverloadErr(rhs)
+					}
+					env.values[k] = envValue{
+						origType: reflect.TypeOf(v.Value()),
+						value:    v,
+					}
+					return v
+				},
+			}))
 		if err != nil {
 			return nil, fmt.Errorf("construct CEL program: %w", err)
 		}
