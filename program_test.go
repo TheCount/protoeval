@@ -37,14 +37,14 @@ func TestProgramStore(t *testing.T) {
 		Value: &Value_Seq{
 			Seq: &Value_ValueList{
 				Values: []*Value{
-					&Value{
+					{
 						Value: &Value_Program_{
 							Program: &Value_Program{
 								Code: `42.store("answer")`,
 							},
 						},
 					},
-					&Value{
+					{
 						Value: &Value_Load{
 							Load: "answer",
 						},

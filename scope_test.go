@@ -35,7 +35,7 @@ func TestFieldScope(t *testing.T) {
 	if _, err := Eval(env, testmsg, &Value{
 		Scope: &structpb.ListValue{
 			Values: []*structpb.Value{
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_StringValue{
 						StringValue: "does_not_exist",
 					},
@@ -48,7 +48,7 @@ func TestFieldScope(t *testing.T) {
 	result, err := Eval(env, testmsg, &Value{
 		Scope: &structpb.ListValue{
 			Values: []*structpb.Value{
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_StringValue{
 						StringValue: "a_scalar",
 					},
@@ -79,12 +79,12 @@ func TestStringMapScope(t *testing.T) {
 	if _, err := Eval(env, testmsg, &Value{
 		Scope: &structpb.ListValue{
 			Values: []*structpb.Value{
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_StringValue{
 						StringValue: "a_string_map",
 					},
 				},
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_StringValue{
 						StringValue: "does_not_exist",
 					},
@@ -97,12 +97,12 @@ func TestStringMapScope(t *testing.T) {
 	result, err := Eval(env, testmsg, &Value{
 		Scope: &structpb.ListValue{
 			Values: []*structpb.Value{
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_StringValue{
 						StringValue: "a_string_map",
 					},
 				},
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_StringValue{
 						StringValue: "MapKey",
 					},
@@ -133,12 +133,12 @@ func TestBoolMapScope(t *testing.T) {
 	if _, err := Eval(env, testmsg, &Value{
 		Scope: &structpb.ListValue{
 			Values: []*structpb.Value{
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_StringValue{
 						StringValue: "a_bool_map",
 					},
 				},
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_BoolValue{
 						BoolValue: false,
 					},
@@ -151,12 +151,12 @@ func TestBoolMapScope(t *testing.T) {
 	result, err := Eval(env, testmsg, &Value{
 		Scope: &structpb.ListValue{
 			Values: []*structpb.Value{
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_StringValue{
 						StringValue: "a_bool_map",
 					},
 				},
-				&structpb.Value{
+				{
 					Kind: &structpb.Value_BoolValue{
 						BoolValue: true,
 					},
