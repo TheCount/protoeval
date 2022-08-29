@@ -165,7 +165,7 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		descs := et.Descriptor().Values()
 		switch y := x.Enum.By.(type) {
 		case nil:
-			return nil, errors.New("Value.enum.by not set")
+			return nil, errors.New("oneof Value.enum.by not set")
 		case *Value_Enum_Number:
 			enumNumber := protoreflect.EnumNumber(y.Number)
 			if descs.ByNumber(enumNumber) == nil {
