@@ -336,7 +336,7 @@ message Value {
     repeated string lines = 2;
   }
 
-  // Range describes a value obtains by ranging over an aggregate, i. e., a
+  // Range describes a value obtained by ranging over an aggregate, i. e., a
   // list or a map.
   message Range {
     // iterable is the iterable value ranged over. If omitted, the scope value
