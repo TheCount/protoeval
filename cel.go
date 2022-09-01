@@ -65,6 +65,8 @@ func initCel() {
 					decls.NewObjectType("com.github.thecount.protoeval.Scope"),
 				),
 				decls.NewVar("args", decls.NewListType(decls.Dyn)),
+				decls.NewFunction("dump", decls.NewInstanceOverload("dyn_dump",
+					[]*exprpb.Type{decls.Dyn}, decls.Dyn)),
 				decls.NewFunction("nix", decls.NewInstanceOverload("dyn_nix",
 					[]*exprpb.Type{decls.Dyn}, decls.Null)),
 				decls.NewFunction("set_index",

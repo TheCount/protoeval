@@ -6,6 +6,7 @@ import (
 	reflect "reflect"
 	"strings"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
@@ -529,6 +530,12 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 			return nil, fmt.Errorf("compile CEL program source: %w", err)
 		}
 		prg, err := commonCelEnv.Program(ast, cel.Functions(&functions.Overload{
+			Operator: "dyn_dump",
+			Unary: func(val ref.Val) ref.Val {
+				spew.Dump(val.Value())
+				return val
+			},
+		}, &functions.Overload{
 			Operator: "dyn_nix",
 			Unary: func(ref.Val) ref.Val {
 				return types.NullValue
