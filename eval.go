@@ -536,6 +536,44 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 				return val
 			},
 		}, &functions.Overload{
+			Operator: "dyn_has_index_dyn",
+			Binary: func(lhs, rhs ref.Val) ref.Val {
+				rLhs := reflect.ValueOf(lhs.Value())
+				if rLhs.Kind() == reflect.Pointer {
+					rLhs = rLhs.Elem()
+				}
+				switch rLhs.Kind() {
+				default:
+					return types.MaybeNoSuchOverloadErr(lhs)
+				case reflect.Array, reflect.Slice:
+					var i int
+					rIdx := reflect.ValueOf(rhs.Value())
+					switch {
+					case rIdx.CanInt():
+						i = int(rIdx.Int())
+					case rIdx.CanUint():
+						i = int(rIdx.Uint())
+					default:
+						return types.MaybeNoSuchOverloadErr(rhs)
+					}
+					if i >= 0 && i < rLhs.Len() {
+						return types.True
+					}
+					return types.False
+				case reflect.Map:
+					keyType := rLhs.Type().Key()
+					rKey := reflect.ValueOf(rhs.Value())
+					if !rKey.CanConvert(keyType) {
+						return types.MaybeNoSuchOverloadErr(rhs)
+					}
+					value := rLhs.MapIndex(rKey.Convert(keyType))
+					if value.IsValid() {
+						return types.True
+					}
+					return types.False
+				}
+			},
+		}, &functions.Overload{
 			Operator: "dyn_nix",
 			Unary: func(ref.Val) ref.Val {
 				return types.NullValue
