@@ -489,7 +489,16 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		if types.IsError(value) {
 			return value, nil
 		}
-		env.values[x.Store.Key] = envValue{
+		keyValue, err := eval(env, cyclesLeft, x.Store.Key)
+		if err != nil {
+			return keyValue, fmt.Errorf("eval env key: %w", err)
+		}
+		keyString, ok := keyValue.Value().(string)
+		if !ok {
+			return keyValue, fmt.Errorf("key value is not a string (%T)",
+				keyValue.Value())
+		}
+		env.values[keyString] = envValue{
 			origType: reflect.TypeOf(value.Value()),
 			value:    value,
 		}
@@ -498,13 +507,31 @@ func eval(env *Env, cyclesLeft *int, value *Value) (ref.Val, error) {
 		if x.Proc.Value == nil {
 			return nil, errors.New("proc value missing")
 		}
-		env.values[x.Proc.Key] = envValue{
+		keyValue, err := eval(env, cyclesLeft, x.Proc.Key)
+		if err != nil {
+			return keyValue, fmt.Errorf("eval env key: %w", err)
+		}
+		keyString, ok := keyValue.Value().(string)
+		if !ok {
+			return keyValue, fmt.Errorf("key value is not a string (%T)",
+				keyValue.Value())
+		}
+		env.values[keyString] = envValue{
 			origType: reflect.TypeOf((*Value)(nil)),
 			value:    celTypeRegistry.NativeToValue(x.Proc.Value),
 		}
 		return types.NullValue, nil
 	case *Value_Load:
-		envValue, ok := env.values[x.Load]
+		keyValue, err := eval(env, cyclesLeft, x.Load)
+		if err != nil {
+			return keyValue, fmt.Errorf("eval env key: %w", err)
+		}
+		keyString, ok := keyValue.Value().(string)
+		if !ok {
+			return keyValue, fmt.Errorf("key value is not a string (%T)",
+				keyValue.Value())
+		}
+		envValue, ok := env.values[keyString]
 		if !ok {
 			return types.NullValue, nil
 		}

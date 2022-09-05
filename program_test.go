@@ -46,7 +46,13 @@ func TestProgramStore(t *testing.T) {
 					},
 					{
 						Value: &Value_Load{
-							Load: "answer",
+							Load: &Value{
+								Value: &Value_Program_{
+									Program: &Value_Program{
+										Code: `'answer'`,
+									},
+								},
+							},
 						},
 					},
 				},

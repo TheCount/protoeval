@@ -162,8 +162,10 @@ message Value {
     StoredValue proc = 27;
 
     // load loads a value from the environment.
-    // If no previous store is present, the value is null.
-    string load = 28;
+    // load should evaluate to a string, the key to be retrieved from the
+    // enviroinment.
+    // If no previous store under that key is present, the value is null.
+    Value load = 28;
 
     // program is a user defined program to determine the value.
     Program program = 29;
@@ -361,8 +363,8 @@ message Value {
 
   // StoredValue describes a value stored in the environment.
   message StoredValue {
-    // key is the storage key.
-    string key = 1;
+    // key is the storage key. It must evaluate to a string.
+    Value key = 1;
 
     // value is the value stored under key.
     Value value = 2;
